@@ -18,7 +18,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	github.com/urfave/cli/v3 v3.14.0
-	github.com/webcenter-fr/eino-ext v0.0.0-20261110154818-faf4ab8fb3a3
+	github.com/webcenter-fr/eino-ext v0.1.0
 	golang.org/x/oauth2 v0.36.0
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2

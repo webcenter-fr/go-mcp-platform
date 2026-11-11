@@ -292,8 +292,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/urfave/cli/v3 v3.14.0 h1:a8414NQlHJs0c/iBsulKLzlES0n/lEAskbL2LKpU4/s=
 github.com/urfave/cli/v3 v3.14.0/go.mod h1:vXn6HxPNccJSzQr2QvwVncOKrgYGIHU0HY5h8B2nQj4=
-github.com/webcenter-fr/eino-ext v0.0.0-20261110154818-faf4ab8fb3a3 h1:pzm86C9ZRQvJ2cli+ECXOp4dsHxo7THFhFEt6+IxL1g=
-github.com/webcenter-fr/eino-ext v0.0.0-20261110154818-faf4ab8fb3a3/go.mod h1:sgQcXIhlL537daNiQljrgomXCSxL1V7y7NCGf62T6Pc=
+github.com/webcenter-fr/eino-ext v0.1.0 h1:pd3U64l1wZUAjQYsjxVGO/Lo9kigeB9FK/LYWkmt4HE=
+github.com/webcenter-fr/eino-ext v0.1.0/go.mod h1:fXu2u9se71gbSCB2cEqbD35xrFCooGQrPksZZhrtla0=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=

@@ -1,0 +1,11 @@
+.git
+.github
+bin
+ci-out
+coverage.out
+*.test
+**/node_modules
+.dagger
+go.work
+go.work.sum
+internal/approval/ui/dist

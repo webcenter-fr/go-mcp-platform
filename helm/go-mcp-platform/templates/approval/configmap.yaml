@@ -1,0 +1,14 @@
+{{- if .Values.approval.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "go-mcp-platform.fullname" . }}-approval
+  labels:
+    {{- include "go-mcp-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: approval
+data:
+  config.yaml: |
+{{ include "go-mcp-platform.approvalConfig" . | indent 4 }}
+  policy.json: |
+{{ toJson .Values.approval.policy | indent 4 }}
+{{- end }}

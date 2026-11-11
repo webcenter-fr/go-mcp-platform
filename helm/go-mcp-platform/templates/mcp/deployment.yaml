@@ -1,0 +1,133 @@
+{{- $root := . -}}
+{{- range $name, $cfg := .Values.mcpServers }}
+{{- if $cfg.enabled }}
+{{- $sa := include "go-mcp-platform.serviceAccountName" (dict "root" $root "component" $name "serviceAccount" $root.Values.mcp.serviceAccount) }}
+{{- $familySecret := include "go-mcp-platform.familySecretName" (dict "root" $root "name" $name) }}
+{{- if $cfg.existingSecret }}{{ $familySecret = $cfg.existingSecret }}{{ end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-mcp-platform.fullname" $root }}-{{ $name }}
+  labels:
+    {{- include "go-mcp-platform.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  {{- if not $cfg.autoscaling.enabled }}
+  replicas: {{ $cfg.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "go-mcp-platform.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "go-mcp-platform.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+      {{- with $cfg.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ $sa }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with $root.Values.mcp.podSecurityContext }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: mcp
+          image: {{ include "go-mcp-platform.image" (dict "root" $root "image" $root.Values.mcp.image) }}
+          imagePullPolicy: {{ $root.Values.mcp.image.pullPolicy }}
+          args:
+            - --config
+            - /etc/go-mcp-platform/config.yaml
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: ops
+              containerPort: 9090
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            {{- with $root.Values.mcp.securityContext }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ops
+          resources:
+            {{- toYaml $cfg.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/go-mcp-platform/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: family
+              mountPath: /etc/go-mcp-platform/secrets/{{ $name }}
+              readOnly: true
+            {{- if $root.Values.mcp.auth.enabled }}
+            - name: auth
+              mountPath: /etc/go-mcp-platform/secrets/auth
+              readOnly: true
+            {{- end }}
+            {{- if and $root.Values.mcp.approval.enabled (include "go-mcp-platform.familyHasWriteTools" $name) }}
+            - name: receipt
+              mountPath: /etc/go-mcp-platform/secrets/receipt-secret
+              subPath: {{ $root.Values.approval.receipt.secretKey }}
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "go-mcp-platform.fullname" $root }}-{{ $name }}
+        - name: tmp
+          emptyDir: {}
+        - name: family
+          secret:
+            secretName: {{ $familySecret }}
+        {{- if $root.Values.mcp.auth.enabled }}
+        - name: auth
+          secret:
+            secretName: {{ include "go-mcp-platform.authSecretName" $root }}
+        {{- end }}
+        {{- if and $root.Values.mcp.approval.enabled (include "go-mcp-platform.familyHasWriteTools" $name) }}
+        - name: receipt
+          secret:
+            secretName: {{ include "go-mcp-platform.receiptSecretName" $root }}
+        {{- end }}
+      {{- with $cfg.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end }}
+{{- end }}

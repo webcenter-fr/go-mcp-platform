@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve version
+        id: v
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-main.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: "0.21.10"
+          verb: call
+          args: >-
+            ci
+            --version ${{ steps.v.outputs.version }}
+            --registry ghcr.io
+            --repository webcenter-fr/go-mcp-platform
+            ${{ github.event_name == 'pull_request' && '--dry-run' || '--publish' }}
+            --registry-username env:REGISTRY_USERNAME
+            --registry-password env:REGISTRY_PASSWORD
+            --codecov-token env:CODECOV_TOKEN
+            export --path ./ci-out
+        env:
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-out
+          path: ./ci-out

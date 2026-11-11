@@ -1,0 +1,15 @@
+{{- if and .Values.approval.enabled .Values.approval.podDisruptionBudget.enabled (gt (int .Values.approval.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "go-mcp-platform.fullname" . }}-approval
+  labels:
+    {{- include "go-mcp-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: approval
+spec:
+  minAvailable: {{ .Values.approval.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "go-mcp-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: approval
+{{- end }}

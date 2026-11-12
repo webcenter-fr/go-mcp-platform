@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,6 +55,22 @@ func TestResolveWorkspace(t *testing.T) {
 	got, err = resolveWorkspace(root, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, root, got)
+}
+
+func TestResolveWorkspaceTouchesIdentityRoot(t *testing.T) {
+	// The workspace GC sweeps <WorkspaceRoot>/<identityHash> directories older
+	// than WorkspaceTTL. resolveWorkspace must refresh the identity root mtime
+	// so an actively-used workspace is not swept.
+	root := t.TempDir()
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(root, old, old))
+
+	_, err := resolveWorkspace(root, "", "")
+	require.NoError(t, err)
+
+	fi, err := os.Stat(root)
+	require.NoError(t, err)
+	assert.True(t, fi.ModTime().After(old.Add(time.Minute)), "identity root mtime must be refreshed on activity")
 }
 
 func TestValidateEnv(t *testing.T) {

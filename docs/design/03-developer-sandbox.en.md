@@ -72,8 +72,10 @@ flowchart TB
 
 Inside the container: full shell, no credentials, egress deny-by-default — the
 blast radius is the container. Outside: everything credentialed is an MCP tool
-under RBAC + approval. `ExportWorkspace` never writes `.git` back, so container
-`git` cannot corrupt the refs `github_commit_push` pushes.
+under RBAC + approval. `ExportWorkspace` never writes `.git` back on the export
+path, but the workspace is mounted read-write into the container, so a
+compromised container can still modify `.git` directly through the mount; the
+export exclusion only prevents the export step from clobbering refs.
 
 ## 3. One `developer_sandbox_exec`
 
@@ -231,7 +233,7 @@ already possesses are outside this threat model.**
 | LLM widens its own egress | `allowLocalNetwork` exists only in operator config; `SandboxExecParams` has no such field. | None at the tool surface. |
 | LLM picks a malicious base image | `profile` is not a tool parameter; images come from overrides/detection and are checked against `AllowedImages`. | None at the tool surface. |
 | Command injection | `WithExec(argv)` — no shell. `Command` is `[]string` with `dive,required`. | A command the container runs through its own shell (e.g. `make`) is the user's build script. |
-| Destructive commands | `safety.DefaultCommandBlocklist` (extended, never replaced), checked on every exec. | The container is disposable; `.git` is never exported back. |
+| Destructive commands | `safety.DefaultCommandBlocklist` (extended, never replaced), checked on every exec. | The container is disposable; `.git` is excluded from the export path (but the read-write mount means a compromised container can still touch `.git` directly). |
 | Path traversal to the host | Per-identity root; sanitized owner/repo; `workspace.ResolvePath` rejects traversal and symlinks. | None known. |
 | Cross-tenant workspace read | Per-identity root keyed by `sha256(subject)`; `ToolsFor` forces identity-keyed caching. | stdio with no `LocalIdentity` collapses to `local` — correct for a single-user process. |
 | Container escape | Non-root `ContainerUser` (default `1000:1000`); no root capabilities. | The engine sidecar is privileged by necessity; isolate it. |

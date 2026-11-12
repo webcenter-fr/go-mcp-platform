@@ -65,14 +65,21 @@ func identityFromTokenInfo(ti *auth.TokenInfo) *Identity {
 // never contain a raw NUL byte — so the separator-joined key cannot collide
 // when a user or group name contains the separator (a plain
 // user+"\x00"+join(groups, ",") key collides for groups ["b,c"] vs ["b","c"]).
+//
+// Sub is included because the developer family derives the per-identity
+// workspace root from Identity.Subject() (Sub, falling back to User). Two
+// identities that share a User and Groups but differ in Sub (e.g. two OIDC
+// accounts with the same preferred_username) must never share a server,
+// otherwise one identity would be served the other's tools bound to the
+// other's workspace.
 func identityCacheKey(id *Identity) string {
 	if id == nil {
 		return "anonymous"
 	}
 	groups := append([]string(nil), id.Groups...)
 	sort.Strings(groups)
-	parts := make([]string, 0, len(groups)+1)
-	parts = append(parts, strconv.Quote(id.User))
+	parts := make([]string, 0, len(groups)+2)
+	parts = append(parts, strconv.Quote(id.User), strconv.Quote(id.Sub))
 	for _, g := range groups {
 		parts = append(parts, strconv.Quote(g))
 	}

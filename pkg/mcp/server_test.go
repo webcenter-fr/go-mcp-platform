@@ -471,6 +471,35 @@ func TestServerForToolsForForcesIdentityKeying(t *testing.T) {
 	assert.NotContains(t, toolNames(listA), "tool_bob")
 }
 
+func TestServerForToolsForDistinguishesSub(t *testing.T) {
+	// Regression guard: two identities with the same User and Groups but
+	// different Sub must never share a per-identity server. The developer
+	// family derives the workspace root from Subject() (Sub), so a cache-key
+	// collision here would serve one identity the other's workspace.
+	s := newTestServer(t, &Config{
+		ToolsFor: func(_ context.Context, id *Identity) ([]tool.InvokableTool, error) {
+			name := "tool_anonymous"
+			if id != nil {
+				name = "tool_" + id.Subject()
+			}
+			return []tool.InvokableTool{&fakeTool{name: name}}, nil
+		},
+	})
+	ctx := context.Background()
+
+	srvA, err := s.ServerFor(ctx, &Identity{User: "alice", Sub: "sub-a"})
+	require.NoError(t, err)
+	srvB, err := s.ServerFor(ctx, &Identity{User: "alice", Sub: "sub-b"})
+	require.NoError(t, err)
+	assert.NotSame(t, srvA, srvB, "same User with different Sub must not share a server")
+
+	csA := connectInMemory(t, s, &Identity{User: "alice", Sub: "sub-a"}, nil)
+	listA, err := csA.ListTools(ctx, &mcpsdk.ListToolsParams{})
+	require.NoError(t, err)
+	assert.Contains(t, toolNames(listA), "tool_sub-a")
+	assert.NotContains(t, toolNames(listA), "tool_sub-b")
+}
+
 func TestServerForToolsForErrorPropagates(t *testing.T) {
 	s := newTestServer(t, &Config{
 		ToolsFor: func(context.Context, *Identity) ([]tool.InvokableTool, error) {

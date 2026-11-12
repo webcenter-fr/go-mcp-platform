@@ -79,6 +79,21 @@ func TestIdentityCacheKey(t *testing.T) {
 		identityCacheKey(&Identity{User: "alice", Groups: []string{"dev"}}))
 }
 
+func TestIdentityCacheKeyIncludesSub(t *testing.T) {
+	// Two identities with the same User and Groups but different Sub must never
+	// share a per-identity server: the developer family binds each identity's
+	// tools to a workspace root derived from Subject() (Sub, falling back to
+	// User). A collision here would serve one identity the other's workspace.
+	assert.NotEqual(t,
+		identityCacheKey(&Identity{User: "alice", Sub: "sub-a"}),
+		identityCacheKey(&Identity{User: "alice", Sub: "sub-b"}))
+
+	// Same User+Groups+Sub → same key (stable).
+	assert.Equal(t,
+		identityCacheKey(&Identity{User: "alice", Sub: "sub-a", Groups: []string{"dev"}}),
+		identityCacheKey(&Identity{User: "alice", Sub: "sub-a", Groups: []string{"dev"}}))
+}
+
 func TestIdentityCacheKeyNoCollision(t *testing.T) {
 	// The key must be injective: different identities must never share a
 	// per-identity server (a collision would serve one identity the other's

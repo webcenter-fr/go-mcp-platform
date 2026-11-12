@@ -79,8 +79,9 @@ flowchart TB
 Dans le conteneur : shell complet, aucun credential, egress deny-by-default — le
 rayon d'action est le conteneur. Dehors : tout ce qui est credentialisé est un
 outil MCP sous RBAC + approbation. `ExportWorkspace` n'écrit jamais `.git` en
-retour, donc le `git` du conteneur ne peut pas corrompre les refs que
-`github_commit_push` pousse.
+retour sur le chemin d'export, mais le workspace est monté en lecture-écriture
+dans le conteneur : un conteneur compromis peut donc toujours modifier `.git`
+directement via le montage ; l'exclusion ne protège que l'étape d'export.
 
 ## 3. Un `developer_sandbox_exec`
 
@@ -244,7 +245,7 @@ menace.**
 | Le LLM élargit son propre egress | `allowLocalNetwork` n'existe que dans la config opérateur ; `SandboxExecParams` n'a pas ce champ. | Aucun à la surface des outils. |
 | Le LLM choisit une image de base malveillante | `profile` n'est pas un paramètre d'outil ; les images viennent des overrides/détection et sont vérifiées contre `AllowedImages`. | Aucun à la surface des outils. |
 | Injection de commande | `WithExec(argv)` — pas de shell. `Command` est `[]string` avec `dive,required`. | Une commande que le conteneur exécute via son propre shell (ex. `make`) est le script de build de l'utilisateur. |
-| Commandes destructrices | `safety.DefaultCommandBlocklist` (étendue, jamais remplacée), vérifiée à chaque exec. | Le conteneur est jetable ; `.git` n'est jamais exporté. |
+| Commandes destructrices | `safety.DefaultCommandBlocklist` (étendue, jamais remplacée), vérifiée à chaque exec. | Le conteneur est jetable ; `.git` est exclu du chemin d'export (mais le montage en lecture-écriture permet à un conteneur compromis de toucher `.git` directement). |
 | Traversée de chemin vers l'hôte | Racine par identité ; owner/repo assainis ; `workspace.ResolvePath` rejette traversée et symlinks. | Aucun connu. |
 | Lecture de workspace entre tenants | Racine par identité indexée par `sha256(subject)` ; `ToolsFor` force le cache par identité. | stdio sans `LocalIdentity` retombe sur `local` — correct pour un processus mono-utilisateur. |
 | Évasion de conteneur | `ContainerUser` non-root (défaut `1000:1000`) ; pas de capacités root. | Le sidecar moteur est privilégié par nécessité ; l'isoler. |

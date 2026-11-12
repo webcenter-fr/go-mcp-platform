@@ -264,6 +264,7 @@ func (s *scaffoldService) apply(_ context.Context, params *ScaffoldApplyParams) 
 		return "", err
 	}
 	repoDir := repoWorkspacePath(s.identityRoot, params.Owner, params.Repo)
+	touchIdentityRoot(s.identityRoot)
 	selected := make([]Template, 0, len(params.IDs))
 	for _, id := range params.IDs {
 		tmpl, ok := TemplateByID(id)

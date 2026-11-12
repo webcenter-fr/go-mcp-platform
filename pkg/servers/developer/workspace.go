@@ -64,6 +64,7 @@ func resolveWorkspace(identityRoot, owner, repo string) (string, error) {
 		if err := os.MkdirAll(identityRoot, 0o755); err != nil {
 			return "", emperrors.Wrapf(err, "failed to create identity workspace %q", identityRoot)
 		}
+		touchIdentityRoot(identityRoot)
 		return identityRoot, nil
 	}
 	dir := repoWorkspacePath(identityRoot, owner, repo)
@@ -74,7 +75,16 @@ func resolveWorkspace(identityRoot, owner, repo string) (string, error) {
 	if !exists {
 		return "", emperrors.Wrapf(ErrWorkspaceMissing, "workspace %q", dir)
 	}
+	touchIdentityRoot(identityRoot)
 	return dir, nil
+}
+
+// touchIdentityRoot refreshes the identity workspace mtime so the workspace GC
+// (which sweeps <WorkspaceRoot>/<identityHash> directories older than
+// WorkspaceTTL) treats it as active. Best-effort: a failed touch must not fail
+// the operation.
+func touchIdentityRoot(identityRoot string) {
+	_ = fileutil.TouchDir(identityRoot)
 }
 
 // envKeyPattern is the accepted syntax for an environment variable name.

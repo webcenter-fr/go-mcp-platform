@@ -127,8 +127,10 @@ the CLI binary, and the distroless MCP image has no CLI. See
 - Every exec is one-shot: no watch mode, no REPL, no debugger attach.
 - Output is buffered, truncated and redacted; it is not streamed.
 - `persistChanges=true` exports the container workspace back to the host,
-  excluding `.git`, so container `git` cannot corrupt the refs that
-  `github_commit_push` pushes.
+  excluding `.git` on the export path. Note the workspace is mounted read-write
+  into the container, so a compromised container can still modify `.git`
+  directly through the mount; the export exclusion only prevents the export
+  step from clobbering refs.
 
 ## Residual risk
 

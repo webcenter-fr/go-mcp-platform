@@ -92,3 +92,14 @@ func TestServeHTTPOpsAndShutdown(t *testing.T) {
 		t.Fatal("serveHTTP did not shut down")
 	}
 }
+
+func TestRunDeveloperStdio(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := run(ctx, []string{
+		"mcp-server", "--config", "testdata/developer.yaml", "--server", "developer",
+		"--transport", "stdio", "--ops-addr", "not-an-address",
+	})
+	require.ErrorIs(t, err, context.Canceled)
+}

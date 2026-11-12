@@ -11,6 +11,7 @@ They are written in a technical style, in **English and French**, and use
 | Architecture | [`00-architecture.en.md`](./00-architecture.en.md) | [`00-architecture.fr.md`](./00-architecture.fr.md) | The `cmd -> internal -> pkg -> eino-ext` dependency rule, the `pkg` vs `internal` split, the MCP toolkit (adapter, AuthN providers, AuthZ/RBAC, transports, why the LLM cannot self-approve), the MCP handler request path, the module boundary and the entry-point signatures. |
 | MCP hard approval | [`01-mcp-hard-approval.en.md`](./01-mcp-hard-approval.en.md) | [`01-mcp-hard-approval.fr.md`](./01-mcp-hard-approval.fr.md) | The standalone out-of-band approval service: topology, approval flow, signed receipt verification, `argsHash` canonicalization, store backends, security controls, and the Nuxt UI build/embedding. |
 | Deployment and CI | [`02-deployment-and-ci.en.md`](./02-deployment-and-ci.en.md) | [`02-deployment-and-ci.fr.md`](./02-deployment-and-ci.fr.md) | The deployable MCP/approval binaries, YAML configuration and file/env secrets, container images, the Helm chart and its security guards, and the Dagger CI pipeline. |
+| Developer sandbox | [`03-developer-sandbox.en.md`](./03-developer-sandbox.en.md) | [`03-developer-sandbox.fr.md`](./03-developer-sandbox.fr.md) | The credential-free Dagger sandbox, the GitHub tool family, the scaffolding surface, per-identity workspaces, the egress reality, the three engine modes, the lifecycle/tier model and the deferred in-engine Dagger LLM. |
 
 ## Related projects
 

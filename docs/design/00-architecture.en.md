@@ -64,7 +64,7 @@ nothing in this repository is imported by eino-ext. The arrows may skip a layer
 
 ## 3. Module boundary
 
-The platform imports exactly seven eino-ext packages:
+The platform imports the following eino-ext packages:
 
 | Package | Used for |
 |---|---|
@@ -72,9 +72,15 @@ The platform imports exactly seven eino-ext packages:
 | `components/tool/argocd` | ArgoCD tool family (`argocdtool.Configs`) |
 | `components/tool/prometheus` | Prometheus tool family (`promtool.Configs`) |
 | `components/tool/grafana` | Grafana tool family (`grafanatool.Configs`) |
+| `components/tool/github` | GitHub tool family (`githubtool.Configs`, `NewAllTools`, `WriteToolNames`) |
 | `libs/toolkit/safety` | Gate, policy, audit and authorization primitives |
 | `libs/toolkit/validate` | Shared `validate.Struct` helper |
 | `libs/toolkit/osclient` | OpenSearch client used by the approval store |
+| `libs/toolkit/dagger` | Lazy Dagger client, container options, workspace export |
+| `libs/toolkit/egress` | Egress policy and HTTP CONNECT proxy |
+| `libs/toolkit/profile` | Project marker detection and base-image selection |
+| `libs/toolkit/workspace` | Session/workspace layout and symlink-safe path resolution |
+| `libs/toolkit/fileutil` | Root-directory and path-segment validation |
 
 `libs/toolkit/confirm` is used transitively by the tool packages, never
 imported directly by platform code.
@@ -147,7 +153,28 @@ Enforcement happens at two points:
   `Server.ListenAndServeHTTP(ctx, addr)`: stateful mode only. Stateless mode
   rejects server→client requests, which would break elicitation-based approval.
 
-### 4.5 Why the LLM cannot self-approve
+### 4.5 Per-identity tool sets (`ToolsFor`)
+
+`Config.ToolsFor` and `Config.WriteToolsFor` let a family build its tool set
+from the authenticated identity at construction time. They take precedence over
+`Tools`/`WriteTools` and are called once per distinct identity; the result is
+cached with the per-identity server. Setting `ToolsFor` forces identity-keyed
+server caching even when no RBAC policy is configured, so two identities never
+share a tool set (or a workspace). The developer family uses this hook to bind
+each identity to `<WorkspaceRoot>/<sha256(subject)[:16]>`.
+
+### 4.6 Prompts and resources
+
+`Config.Prompts`/`Resources` (and their per-identity `PromptsFor`/
+`ResourcesFor` equivalents) expose MCP prompts and resources. They are **read**
+operations: RBAC reuses `Authorizer.Authorize(id, name, "", false)`, matching
+the prompt/resource name against `AccessRule.Tools` (e.g. `developer_*`). The
+filter is applied at registration time (`prompts/list`, `resources/list`) and
+again inside the handler (`prompts/get`, `resources/read`), mirroring the
+tools/list + tools/call double check. Every read emits a `safety.AuditEvent`
+with `PhaseRead` and `ToolName` `prompt:<name>` or `resource:<uri>`.
+
+### 4.7 Why the LLM cannot self-approve
 
 Real execution of a write tool requires a human decision. The model-supplied
 `confirmed=true` argument is **never** an authorization source; it only
@@ -231,6 +258,9 @@ func kubernetes.NewServer(ctx context.Context, configs k8stool.Configs, scheme *
 func argocd.NewServer(ctx context.Context, configs argocdtool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
 func prometheus.NewServer(ctx context.Context, configs promtool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
 func grafana.NewServer(ctx context.Context, configs grafanatool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
+func developer.NewServer(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, error)
+func developer.NewServerWithRunner(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, io.Closer, error)
+func developer.WriteToolNames(cfg *developer.Config) []string
 
 // internal/serverconfig — binary wiring
 func Load(path string, overrides map[string]any) (*Config, error)
@@ -265,7 +295,23 @@ rejects a mismatch. The signed receipt carries the hash, so approving X can
 never execute Y. See
 [`01-mcp-hard-approval.en.md`](./01-mcp-hard-approval.en.md) for the full flow.
 
-### 7.3 Binary wiring
+### 7.3 adk session values are unreachable from MCP
+
+`workspace.Layout` and `github.Config.CloneDir` resolve per-session paths via
+`fileutil.SessionFromContext` → `adk.GetSessionValue(ctx, key)`. An MCP tool
+handler can never populate an adk session: `adk.AddSessionValue` is a silent
+no-op without an adk run context, and the only constructors are unexported.
+With `RequireSession: true` every call fails closed; with `RequireSession:
+false` every identity resolves to the literal `default` namespace, so user A's
+shell could read user B's cloned private source.
+
+The developer family therefore derives the workspace root from the
+**authenticated identity** (server-side, unforgeable) and builds that identity's
+tools through `ToolsFor`. GitHub tools are constructed with `CloneDir` set to
+the identity root and `RequireSession: false`; the `default` session segment
+inside that root is harmless because the root itself is per-identity.
+
+### 7.4 Binary wiring
 
 `internal/serverconfig.Load` builds a viper instance with `MCP_PLATFORM_*`
 environment support, applies defaults, reads the YAML file, applies CLI

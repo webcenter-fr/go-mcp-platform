@@ -299,6 +299,84 @@ mcp:
 ## @param mcpServers.grafana.nodeSelector Grafana MCP node selector
 ## @param mcpServers.grafana.tolerations Grafana MCP tolerations
 ## @param mcpServers.grafana.affinity Grafana MCP affinity
+## @param mcpServers.developer.enabled Enable the developer MCP server (DANGEROUS: needs a Dagger engine)
+## @param mcpServers.developer.image.registry Developer image registry
+## @param mcpServers.developer.image.repository Developer image repository
+## @param mcpServers.developer.image.tag Developer image tag (defaults to Chart.AppVersion)
+## @param mcpServers.developer.image.pullPolicy Developer image pull policy
+## @param mcpServers.developer.workspaceRoot Host root for per-identity workspaces
+## @param mcpServers.developer.baseImage Fallback OCI base image
+## @param mcpServers.developer.imageOverrides Per-profile base image overrides
+## @param mcpServers.developer.allowedImages Allowlist of permitted base images
+## @param mcpServers.developer.defaultTimeout Default command timeout
+## @param mcpServers.developer.maxTimeout Maximum command timeout
+## @param mcpServers.developer.maxOutputBytes Maximum captured output bytes
+## @param mcpServers.developer.maxConcurrentExecs Maximum simultaneous executions
+## @param mcpServers.developer.containerUser Container user (never root)
+## @param mcpServers.developer.workspaceTTL Idle workspace TTL
+## @param mcpServers.developer.workspaceGCInterval Workspace GC interval
+## @param mcpServers.developer.egress.defaultDeny Deny all egress except the allowlist
+## @param mcpServers.developer.egress.allowHosts Allowed egress hostnames (empty = built-in registry allowlist)
+## @param mcpServers.developer.egress.allowCIDRs Allowed egress CIDRs
+## @param mcpServers.developer.egress.allowLocalNetwork DANGEROUS: allow local/private network egress
+## @param mcpServers.developer.egress.acknowledgeLocalNetworkRisk Acknowledge the local-network risk
+## @param mcpServers.developer.engine.mode Engine mode: sidecar, cloud or dagger-kubernetes
+## @param mcpServers.developer.engine.runnerHost Dagger runner host override
+## @param mcpServers.developer.engine.cloudURL Dagger Cloud / supervisor base URL
+## @param mcpServers.developer.engine.cloudToken Dagger Cloud token (stored in a Secret)
+## @param mcpServers.developer.engine.cloudTokenExistingSecret Existing Secret containing the Dagger Cloud token
+## @param mcpServers.developer.engine.cloudTokenSecretKey Key in the Dagger Cloud token Secret
+## @param mcpServers.developer.engine.engineVersion Pinned Dagger engine version
+## @param mcpServers.developer.engine.cliPath Dagger CLI binary path
+## @param mcpServers.developer.engine.registryAuth Registry pull credentials keyed by hostname
+## @param mcpServers.developer.engine.sidecar.image.registry Dagger engine image registry
+## @param mcpServers.developer.engine.sidecar.image.repository Dagger engine image repository
+## @param mcpServers.developer.engine.sidecar.image.tag Dagger engine image tag
+## @param mcpServers.developer.engine.sidecar.image.pullPolicy Dagger engine image pull policy
+## @param mcpServers.developer.engine.sidecar.resources.requests.cpu Dagger engine CPU request
+## @param mcpServers.developer.engine.sidecar.resources.requests.memory Dagger engine memory request
+## @param mcpServers.developer.engine.sidecar.resources.limits.cpu Dagger engine CPU limit
+## @param mcpServers.developer.engine.sidecar.resources.limits.memory Dagger engine memory limit
+## @param mcpServers.developer.engine.sidecar.persistence.enabled Enable the engine cache PVC
+## @param mcpServers.developer.engine.sidecar.persistence.size Engine cache PVC size
+## @param mcpServers.developer.engine.sidecar.persistence.storageClass Engine cache PVC storage class
+## @param mcpServers.developer.engine.sidecar.persistence.accessMode Engine cache PVC access mode
+## @param mcpServers.developer.engine.sidecar.persistence.acknowledgeColdCache Acknowledge a cold engine cache per restart
+## @param mcpServers.developer.engine.sidecar.proxy.httpProxy HTTP proxy for the engine
+## @param mcpServers.developer.engine.sidecar.proxy.httpsProxy HTTPS proxy for the engine
+## @param mcpServers.developer.engine.sidecar.proxy.noProxy NO_PROXY for the engine
+## @param mcpServers.developer.github.readOnly Expose only read-only GitHub tools
+## @param mcpServers.developer.github.instances GitHub instances
+## @param mcpServers.developer.github.existingSecret Existing Secret containing the developer credentials
+## @param mcpServers.developer.github.approvalTokenHash Approval token hash when existingSecret is used
+## @param mcpServers.developer.persistence.enabled Enable the workspace PVC
+## @param mcpServers.developer.persistence.size Workspace PVC size
+## @param mcpServers.developer.persistence.storageClass Workspace PVC storage class
+## @param mcpServers.developer.persistence.accessMode Workspace PVC access mode
+## @param mcpServers.developer.replicaCount Developer MCP replica count
+## @param mcpServers.developer.service.type Developer MCP Service type
+## @param mcpServers.developer.service.port Developer MCP Service port
+## @param mcpServers.developer.ingress.enabled Enable the developer MCP Ingress
+## @param mcpServers.developer.ingress.className Ingress class name
+## @param mcpServers.developer.ingress.host Ingress host
+## @param mcpServers.developer.ingress.tls.enabled Enable Ingress TLS
+## @param mcpServers.developer.ingress.tls.secretName Ingress TLS secret name
+## @param mcpServers.developer.ingress.annotations Ingress annotations
+## @param mcpServers.developer.podDisruptionBudget.enabled Enable the developer MCP PDB
+## @param mcpServers.developer.podDisruptionBudget.minAvailable PDB minAvailable
+## @param mcpServers.developer.autoscaling.enabled Enable the developer MCP HPA
+## @param mcpServers.developer.autoscaling.minReplicas HPA minimum replicas
+## @param mcpServers.developer.autoscaling.maxReplicas HPA maximum replicas
+## @param mcpServers.developer.autoscaling.targetCPUUtilizationPercentage HPA CPU target
+## @param mcpServers.developer.resources Developer MCP resource requests and limits
+## @param mcpServers.developer.podAnnotations Developer MCP pod annotations
+## @param mcpServers.developer.nodeSelector Developer MCP node selector
+## @param mcpServers.developer.tolerations Developer MCP tolerations
+## @param mcpServers.developer.affinity Developer MCP affinity
+## @param mcpServers.developer.networkPolicy.enabled Enable the dedicated developer NetworkPolicy
+## @param mcpServers.developer.serviceAccount.create Create the developer ServiceAccount
+## @param mcpServers.developer.serviceAccount.name Developer ServiceAccount name override
+## @param mcpServers.developer.serviceAccount.annotations Developer ServiceAccount annotations
 ##
 mcpServers:
   kubernetes:
@@ -431,3 +509,101 @@ mcpServers:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+  developer:
+    enabled: false
+    image:
+      registry: ghcr.io
+      repository: webcenter-fr/go-mcp-platform/developer
+      tag: ""
+      pullPolicy: IfNotPresent
+    workspaceRoot: /var/lib/go-mcp-platform/workspaces
+    baseImage: alpine:3.20
+    imageOverrides: {}
+    allowedImages: []
+    defaultTimeout: 5m
+    maxTimeout: 15m
+    maxOutputBytes: 256000
+    maxConcurrentExecs: 4
+    containerUser: "1000:1000"
+    workspaceTTL: 24h
+    workspaceGCInterval: 1h
+    egress:
+      defaultDeny: true
+      allowHosts: []
+      allowCIDRs: []
+      allowLocalNetwork: false
+      acknowledgeLocalNetworkRisk: false
+    engine:
+      mode: sidecar
+      runnerHost: ""
+      cloudURL: ""
+      cloudToken: ""
+      cloudTokenExistingSecret: ""
+      cloudTokenSecretKey: token
+      engineVersion: ""
+      cliPath: /usr/local/bin/dagger
+      registryAuth: {}
+      sidecar:
+        image:
+          registry: registry.dagger.io
+          repository: engine
+          tag: v0.21.7
+          pullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+        persistence:
+          enabled: true
+          size: 50Gi
+          storageClass: ""
+          accessMode: ReadWriteOnce
+          acknowledgeColdCache: false
+        proxy:
+          httpProxy: ""
+          httpsProxy: ""
+          noProxy: ""
+    github:
+      readOnly: false
+      instances: {}
+      existingSecret: ""
+      approvalTokenHash: ""
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+      accessMode: ReadWriteOnce
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 8080
+    ingress:
+      enabled: false
+      className: ""
+      host: ""
+      tls:
+        enabled: false
+        secretName: ""
+      annotations: {}
+    podDisruptionBudget:
+      enabled: false
+      minAvailable: 1
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 80
+    resources: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    networkPolicy:
+      enabled: true
+    serviceAccount:
+      create: true
+      name: ""
+      annotations: {}

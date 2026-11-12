@@ -23,7 +23,7 @@ go build -o mcp-server ./cmd/mcp-server
 | Flag | Purpose |
 |---|---|
 | `--config` | YAML configuration file |
-| `--server` | `kubernetes`, `argocd`, `prometheus` or `grafana` |
+| `--server` | `kubernetes`, `argocd`, `prometheus`, `grafana` or `developer` |
 | `--transport` | `stdio` (default) or `http` |
 | `--addr` | MCP HTTP listen address (default `:8080`) |
 | `--ops-addr` | Operations listen address (default `:9090`) |
@@ -52,5 +52,6 @@ ops listener, with a 10s budget so probes stay answerable during drain.
 
 ## Example configuration
 
-See [`testdata/mcp.yaml`](./testdata/mcp.yaml) and the
+See [`testdata/mcp.yaml`](./testdata/mcp.yaml),
+[`testdata/developer.yaml`](./testdata/developer.yaml) and the
 [`serverconfig` README](../../internal/serverconfig/README.md).

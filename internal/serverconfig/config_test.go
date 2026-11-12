@@ -218,3 +218,83 @@ func TestLoadEnvOnlyServer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "argocd", cfg.Server)
 }
+
+func TestLoadDeveloperConfig(t *testing.T) {
+	cfg, err := Load("testdata/developer.yaml", nil)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Developer)
+	assert.Equal(t, "/var/lib/go-mcp-platform/workspaces", cfg.Developer.WorkspaceRoot)
+	assert.Equal(t, "alpine:3.20", cfg.Developer.BaseImage)
+	assert.Equal(t, "5m", cfg.Developer.DefaultTimeout)
+	assert.Equal(t, "15m", cfg.Developer.MaxTimeout)
+	assert.Equal(t, 256000, cfg.Developer.MaxOutputBytes)
+	assert.Equal(t, 4, cfg.Developer.MaxConcurrentExecs)
+	assert.Equal(t, "1000:1000", cfg.Developer.ContainerUser)
+	assert.Equal(t, "24h", cfg.Developer.WorkspaceTTL)
+	assert.Equal(t, "1h", cfg.Developer.WorkspaceGCInterval)
+	require.NotNil(t, cfg.Developer.Scaffolding)
+	assert.True(t, *cfg.Developer.Scaffolding)
+	require.NotNil(t, cfg.Developer.Egress)
+	require.NotNil(t, cfg.Developer.Egress.DefaultDeny)
+	assert.True(t, *cfg.Developer.Egress.DefaultDeny)
+	assert.Equal(t, "/usr/local/bin/dagger", cfg.Developer.Engine.CLIPath)
+	require.NotNil(t, cfg.Developer.GitHub)
+	assert.Equal(t, "ghp_012345678901234567890123456789012345", cfg.Developer.GitHub.Instances["corp"].Token)
+	assert.Equal(t, "30s", cfg.Developer.GitHub.Instances["corp"].Timeout)
+}
+
+func TestLoadDeveloperValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "missing developer block", content: "server: developer\n", wantErr: "developer"},
+		{name: "empty workspace root", content: "server: developer\ndeveloper:\n  workspaceRoot: \"\"\n  engine:\n    mode: sidecar\n", wantErr: "workspaceRoot"},
+		{name: "github without instances", content: "server: developer\ndeveloper:\n  workspaceRoot: /var/lib/workspaces\n  engine:\n    mode: sidecar\n  github:\n    readOnly: true\n", wantErr: "instance"},
+		{name: "unknown developer key", content: "server: developer\ndeveloper:\n  workspaceRoot: /var/lib/workspaces\n  engine:\n    mode: sidecar\n  unknownKey: true\n", wantErr: "unknownkey"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, tt.content), nil)
+			require.Error(t, err)
+			assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.wantErr))
+		})
+	}
+}
+
+func TestLoadDeveloperSecrets(t *testing.T) {
+	dir := t.TempDir()
+	githubToken := writeFile(t, dir, "github-token", "gh-token\n")
+	cloudToken := writeFile(t, dir, "cloud-token", "cloud-token\n")
+	registryPassword := writeFile(t, dir, "registry-password", "registry-password\n")
+	content := "server: developer\n" +
+		"developer:\n" +
+		"  workspaceRoot: /var/lib/workspaces\n" +
+		"  engine:\n" +
+		"    mode: cloud\n" +
+		"    cloudTokenFile: " + cloudToken + "\n" +
+		"    registryAuth:\n" +
+		"      registry:\n" +
+		"        username: user\n" +
+		"        passwordFile: " + registryPassword + "\n" +
+		"  github:\n" +
+		"    instances:\n" +
+		"      corp:\n" +
+		"        tokenFile: " + githubToken + "\n"
+	cfg, err := Load(writeConfig(t, content), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "cloud-token", cfg.Developer.Engine.CloudToken)
+	assert.Equal(t, "registry-password", cfg.Developer.Engine.RegistryAuth["registry"].Password)
+	assert.Equal(t, "gh-token", cfg.Developer.GitHub.Instances["corp"].Token)
+}
+
+func TestBuildDeveloper(t *testing.T) {
+	cfg, err := Load("testdata/developer.yaml", nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv, err := Build(ctx, cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, srv)
+}

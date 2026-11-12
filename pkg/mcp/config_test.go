@@ -92,3 +92,54 @@ func TestNewServerValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigPerIdentityHooksDefaultNil(t *testing.T) {
+	cfg := &Config{InstanceParam: "cluster"}
+	s, err := NewServer(context.Background(), cfg)
+	require.NoError(t, err)
+	assert.Nil(t, s.cfg.ToolsFor)
+	assert.Nil(t, s.cfg.WriteToolsFor)
+	assert.Nil(t, s.cfg.Prompts)
+	assert.Nil(t, s.cfg.Resources)
+	assert.Nil(t, s.cfg.PromptsFor)
+	assert.Nil(t, s.cfg.ResourcesFor)
+}
+
+func TestConfigPromptAndResourceValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+	}{
+		{
+			name: "prompt without handler",
+			cfg:  &Config{InstanceParam: "cluster", Prompts: []PromptSpec{{Name: "p"}}},
+		},
+		{
+			name: "prompt without name",
+			cfg: &Config{InstanceParam: "cluster", Prompts: []PromptSpec{{
+				Handler: func(context.Context, *Identity, map[string]string) (string, error) { return "", nil },
+			}}},
+		},
+		{
+			name: "resource without URI",
+			cfg: &Config{InstanceParam: "cluster", Resources: []ResourceSpec{{
+				Name:    "r",
+				Handler: func(context.Context, *Identity, string) (string, error) { return "", nil },
+			}}},
+		},
+		{
+			name: "resource with scheme-less URI",
+			cfg: &Config{InstanceParam: "cluster", Resources: []ResourceSpec{{
+				URI:     "not-a-uri",
+				Name:    "r",
+				Handler: func(context.Context, *Identity, string) (string, error) { return "", nil },
+			}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewServer(context.Background(), tt.cfg)
+			assert.Error(t, err)
+		})
+	}
+}

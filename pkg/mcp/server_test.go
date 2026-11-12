@@ -438,3 +438,71 @@ func TestListenAndServeHTTPSmoke(t *testing.T) {
 
 // Note: ServeStdio is a thin srv.Run(ctx, &mcpsdk.StdioTransport{}) wrapper;
 // the in-memory tests above cover the server logic it exposes.
+
+func TestServerForToolsForForcesIdentityKeying(t *testing.T) {
+	var calls int
+	s := newTestServer(t, &Config{
+		ToolsFor: func(_ context.Context, id *Identity) ([]tool.InvokableTool, error) {
+			calls++
+			name := "tool_anonymous"
+			if id != nil {
+				name = "tool_" + id.User
+			}
+			return []tool.InvokableTool{&fakeTool{name: name}}, nil
+		},
+	})
+	ctx := context.Background()
+
+	srvA, err := s.ServerFor(ctx, &Identity{User: "alice"})
+	require.NoError(t, err)
+	srvB, err := s.ServerFor(ctx, &Identity{User: "bob"})
+	require.NoError(t, err)
+	assert.NotSame(t, srvA, srvB, "ToolsFor must force identity-keyed server caching")
+
+	// Cached: a second call for the same identity does not rebuild.
+	_, err = s.ServerFor(ctx, &Identity{User: "alice"})
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls, "ToolsFor must be invoked once per distinct identity")
+
+	csA := connectInMemory(t, s, &Identity{User: "alice"}, nil)
+	listA, err := csA.ListTools(ctx, &mcpsdk.ListToolsParams{})
+	require.NoError(t, err)
+	assert.Contains(t, toolNames(listA), "tool_alice")
+	assert.NotContains(t, toolNames(listA), "tool_bob")
+}
+
+func TestServerForToolsForErrorPropagates(t *testing.T) {
+	s := newTestServer(t, &Config{
+		ToolsFor: func(context.Context, *Identity) ([]tool.InvokableTool, error) {
+			return nil, assert.AnError
+		},
+	})
+	_, err := s.ServerFor(context.Background(), &Identity{User: "alice"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "per-identity tools")
+}
+
+func TestWriteToolsForGatesPerIdentity(t *testing.T) {
+	s := newTestServer(t, &Config{
+		ToolsFor: func(context.Context, *Identity) ([]tool.InvokableTool, error) {
+			return []tool.InvokableTool{&fakeTool{name: "write_tool"}}, nil
+		},
+		WriteToolsFor: func(_ context.Context, id *Identity) ([]string, error) {
+			if id != nil && id.User == "writer" {
+				return []string{"write_tool"}, nil
+			}
+			return nil, nil
+		},
+	})
+
+	// The writer's call is gated (no confirmed=true → SAFETY GATE).
+	csWriter := connectInMemory(t, s, &Identity{User: "writer"}, nil)
+	res := callTool(t, csWriter, "write_tool", map[string]any{})
+	assert.True(t, res.IsError)
+	assert.Contains(t, resultText(t, res), "SAFETY GATE")
+
+	// The reader's call is not gated: it reaches the tool.
+	csReader := connectInMemory(t, s, &Identity{User: "reader"}, nil)
+	res = callTool(t, csReader, "write_tool", map[string]any{})
+	assert.False(t, res.IsError)
+}

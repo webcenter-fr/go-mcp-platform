@@ -99,6 +99,8 @@ Comma-separated instance names for a family (clusters for kubernetes).
 {{- $out := list -}}
 {{- if eq .name "kubernetes" -}}
 {{- range $clusterName, $_ := .cfg.clusters -}}{{- $out = append $out $clusterName -}}{{- end -}}
+{{- else if eq .name "developer" -}}
+{{- range $instanceName, $_ := .cfg.github.instances -}}{{- $out = append $out $instanceName -}}{{- end -}}
 {{- else -}}
 {{- range $instanceName, $_ := .cfg.instances -}}{{- $out = append $out $instanceName -}}{{- end -}}
 {{- end -}}
@@ -163,6 +165,14 @@ during helm template, so the check is skipped there.
 {{- end -}}
 
 {{/*
+Name of the developer family Secret.
+*/}}
+{{- define "go-mcp-platform.developerSecretName" -}}
+{{- $cfg := index .Values.mcpServers "developer" -}}
+{{- default (printf "%s-developer" (include "go-mcp-platform.fullname" .)) $cfg.github.existingSecret -}}
+{{- end -}}
+
+{{/*
 Chart guards.
 */}}
 {{- define "go-mcp-platform.validate" -}}
@@ -196,6 +206,19 @@ Chart guards.
 {{- if eq $name "kubernetes" -}}
 {{- if not $cfg.clusters -}}{{- fail (printf "mcpServers.%s is enabled but has no clusters" $name) -}}{{- end -}}
 {{- if or $cfg.rbac.allowWrite $cfg.rbac.allowExec -}}{{- $dangerous = true -}}{{- end -}}
+{{- else if eq $name "developer" -}}
+{{- if and $cfg.github $cfg.github.instances -}}{{- else -}}{{- fail "mcpServers.developer is enabled but has no github.instances" -}}{{- end -}}
+{{- if eq $cfg.engine.mode "cloud" -}}
+{{- if and (not $cfg.engine.cloudToken) (not $cfg.engine.cloudTokenExistingSecret) -}}{{- fail "mcpServers.developer.engine.mode=cloud requires engine.cloudToken or engine.cloudTokenExistingSecret" -}}{{- end -}}
+{{- end -}}
+{{- if eq $cfg.engine.mode "dagger-kubernetes" -}}
+{{- if not $cfg.engine.cloudURL -}}{{- fail "mcpServers.developer.engine.mode=dagger-kubernetes requires engine.cloudURL" -}}{{- end -}}
+{{- if and (not $cfg.engine.cloudToken) (not $cfg.engine.cloudTokenExistingSecret) -}}{{- fail "mcpServers.developer.engine.mode=dagger-kubernetes requires engine.cloudToken or engine.cloudTokenExistingSecret" -}}{{- end -}}
+{{- end -}}
+{{- if and (eq $cfg.engine.mode "sidecar") (not $cfg.engine.sidecar.persistence.enabled) (not $cfg.engine.sidecar.persistence.acknowledgeColdCache) -}}{{- fail "mcpServers.developer.engine.mode=sidecar requires engine.sidecar.persistence.enabled=true or engine.sidecar.persistence.acknowledgeColdCache=true (a cold cache per restart is a trap)" -}}{{- end -}}
+{{- if and $cfg.egress.allowLocalNetwork (not $cfg.egress.acknowledgeLocalNetworkRisk) -}}{{- fail "mcpServers.developer.egress.allowLocalNetwork=true requires egress.acknowledgeLocalNetworkRisk=true" -}}{{- end -}}
+{{- if and (or (gt (int $cfg.replicaCount) 1) $cfg.autoscaling.enabled) (eq $cfg.persistence.accessMode "ReadWriteOnce") -}}{{- fail "mcpServers.developer.replicaCount > 1 or autoscaling.enabled is not supported with persistence.accessMode=ReadWriteOnce" -}}{{- end -}}
+{{- if and $root.Values.mcp.approval.enabled (not $cfg.github.readOnly) (not $cfg.github.existingSecret) -}}{{- fail "mcpServers.developer requires github.existingSecret (with an approval-token key) when approval is enabled; set github.readOnly=true or disable approval" -}}{{- end -}}
 {{- else -}}
 {{- if not $cfg.instances -}}{{- fail (printf "mcpServers.%s is enabled but has no instances" $name) -}}{{- end -}}
 {{- end -}}
@@ -277,6 +300,82 @@ kubernetes:
       defaultTimeout: {{ $cluster.defaultTimeout }}
 {{- end }}
 {{- end }}
+{{- else if eq $name "developer" }}
+developer:
+  workspaceRoot: {{ $cfg.workspaceRoot | quote }}
+  baseImage: {{ $cfg.baseImage | quote }}
+{{- if $cfg.imageOverrides }}
+  imageOverrides:
+{{ toYaml $cfg.imageOverrides | indent 4 }}
+{{- end }}
+{{- if $cfg.allowedImages }}
+  allowedImages:
+{{ toYaml $cfg.allowedImages | indent 4 }}
+{{- end }}
+  defaultTimeout: {{ $cfg.defaultTimeout | quote }}
+  maxTimeout: {{ $cfg.maxTimeout | quote }}
+  maxOutputBytes: {{ $cfg.maxOutputBytes }}
+  maxConcurrentExecs: {{ $cfg.maxConcurrentExecs }}
+  containerUser: {{ $cfg.containerUser | quote }}
+  workspaceTTL: {{ $cfg.workspaceTTL | quote }}
+  workspaceGCInterval: {{ $cfg.workspaceGCInterval | quote }}
+  egress:
+    defaultDeny: {{ $cfg.egress.defaultDeny }}
+{{- if $cfg.egress.allowHosts }}
+    allowHosts:
+{{ toYaml $cfg.egress.allowHosts | indent 6 }}
+{{- end }}
+{{- if $cfg.egress.allowCIDRs }}
+    allowCIDRs:
+{{ toYaml $cfg.egress.allowCIDRs | indent 6 }}
+{{- end }}
+    allowLocalNetwork: {{ $cfg.egress.allowLocalNetwork }}
+  engine:
+    mode: {{ $cfg.engine.mode | quote }}
+{{- if $cfg.engine.runnerHost }}
+    runnerHost: {{ $cfg.engine.runnerHost | quote }}
+{{- else if eq $cfg.engine.mode "sidecar" }}
+    runnerHost: "tcp://127.0.0.1:8081"
+{{- end }}
+{{- if $cfg.engine.cloudURL }}
+    cloudURL: {{ $cfg.engine.cloudURL | quote }}
+{{- end }}
+{{- if $cfg.engine.cloudTokenExistingSecret }}
+    cloudTokenFile: /etc/go-mcp-platform/secrets/developer-cloud/{{ $cfg.engine.cloudTokenSecretKey }}
+{{- else if $cfg.engine.cloudToken }}
+    cloudTokenFile: /etc/go-mcp-platform/secrets/developer/dagger-cloud-token
+{{- end }}
+{{- if $cfg.engine.engineVersion }}
+    engineVersion: {{ $cfg.engine.engineVersion | quote }}
+{{- end }}
+    cliPath: {{ $cfg.engine.cliPath | quote }}
+{{- if $cfg.engine.registryAuth }}
+    registryAuth:
+{{- range $host, $auth := $cfg.engine.registryAuth }}
+      {{ $host }}:
+        username: {{ $auth.username | quote }}
+        passwordFile: /etc/go-mcp-platform/secrets/developer/registry-{{ $host }}-password
+{{- end }}
+{{- end }}
+  github:
+    readOnly: {{ $cfg.github.readOnly }}
+    instances:
+{{- range $instanceName, $instance := $cfg.github.instances }}
+      {{ $instanceName }}:
+        tokenFile: /etc/go-mcp-platform/secrets/developer/github-{{ $instanceName }}-token
+{{- if $instance.baseURL }}
+        baseURL: {{ $instance.baseURL | quote }}
+{{- end }}
+{{- if $instance.uploadURL }}
+        uploadURL: {{ $instance.uploadURL | quote }}
+{{- end }}
+{{- if $instance.timeout }}
+        timeout: {{ $instance.timeout | quote }}
+{{- end }}
+{{- if $instance.tlsSkipVerify }}
+        tlsSkipVerify: true
+{{- end }}
+{{- end }}
 {{- else }}
 {{ $name }}:
   instances:
@@ -325,7 +424,7 @@ authz:
   rules:
 {{ toYaml $root.Values.mcp.authorization.rules | indent 4 }}
 {{- end }}
-{{- if and $root.Values.mcp.approval.enabled (include "go-mcp-platform.familyHasWriteTools" $name) }}
+{{- if and $root.Values.mcp.approval.enabled (include "go-mcp-platform.familyHasWriteTools" $name) (or (ne $name "developer") (not $cfg.github.readOnly)) }}
 approval:
   timeout: 5m
   service:

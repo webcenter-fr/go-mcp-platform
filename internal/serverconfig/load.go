@@ -7,8 +7,9 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
-	"github.com/webcenter-fr/go-mcp-platform/internal/secretref"
 	"github.com/webcenter-fr/eino-ext/libs/toolkit/validate"
+	"github.com/webcenter-fr/go-mcp-platform/internal/secretref"
+	developermcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/developer"
 )
 
 // Default values applied before validation.
@@ -44,6 +45,9 @@ func Load(path string, overrides map[string]any) (*Config, error) {
 		"approval.service.receiptAlgorithm", "approval.service.pollInterval",
 		"approval.service.requestTimeout", "approval.service.ttl",
 		"auth.resourceMetadataURL",
+		"developer.engine.mode", "developer.engine.runnerHost",
+		"developer.engine.cloudURL", "developer.engine.engineVersion",
+		"developer.workspaceRoot",
 	} {
 		_ = v.BindEnv(key)
 	}
@@ -102,6 +106,16 @@ func validateFamily(cfg *Config) error {
 		if cfg.Grafana == nil || len(cfg.Grafana.Instances) == 0 {
 			return errors.New("serverconfig: grafana family requires at least one instance")
 		}
+	case "developer":
+		if cfg.Developer == nil {
+			return errors.New("serverconfig: developer family is not configured")
+		}
+		if cfg.Developer.WorkspaceRoot == "" {
+			return errors.New("serverconfig: developer family requires workspaceRoot")
+		}
+		if cfg.Developer.GitHub != nil && len(cfg.Developer.GitHub.Instances) == 0 {
+			return errors.New("serverconfig: developer github requires at least one instance")
+		}
 	}
 	return nil
 }
@@ -152,6 +166,67 @@ func applyDefaults(cfg *Config) {
 			family.Instances[name] = instance
 		}
 	}
+	applyDeveloperDefaults(cfg.Developer)
+}
+
+// applyDeveloperDefaults mirrors the developer constructor defaults so the
+// loaded configuration is validated against the same effective values.
+func applyDeveloperDefaults(cfg *DeveloperFamily) {
+	if cfg == nil {
+		return
+	}
+	if cfg.BaseImage == "" {
+		cfg.BaseImage = "alpine:3.20"
+	}
+	if cfg.DefaultTimeout == "" {
+		cfg.DefaultTimeout = "5m"
+	}
+	if cfg.MaxTimeout == "" {
+		cfg.MaxTimeout = "15m"
+	}
+	if cfg.MaxOutputBytes == 0 {
+		cfg.MaxOutputBytes = 256000
+	}
+	if cfg.MaxConcurrentExecs == 0 {
+		cfg.MaxConcurrentExecs = 4
+	}
+	if cfg.ContainerUser == "" {
+		cfg.ContainerUser = "1000:1000"
+	}
+	if cfg.WorkspaceTTL == "" {
+		cfg.WorkspaceTTL = "24h"
+	}
+	if cfg.WorkspaceGCInterval == "" {
+		cfg.WorkspaceGCInterval = "1h"
+	}
+	if cfg.Scaffolding == nil {
+		enabled := true
+		cfg.Scaffolding = &enabled
+	}
+	if cfg.Egress == nil {
+		cfg.Egress = &DeveloperEgress{}
+	}
+	if cfg.Egress.DefaultDeny == nil {
+		deny := true
+		cfg.Egress.DefaultDeny = &deny
+	}
+	if len(cfg.Egress.AllowHosts) == 0 {
+		cfg.Egress.AllowHosts = append([]string(nil), developermcp.DefaultEgressAllowHosts...)
+	}
+	if cfg.Engine.CLIPath == "" {
+		cfg.Engine.CLIPath = "/usr/local/bin/dagger"
+	}
+	if cfg.Engine.Mode == "dagger-kubernetes" && cfg.Engine.RunnerHost == "" {
+		cfg.Engine.RunnerHost = "dagger-cloud://self"
+	}
+	if cfg.GitHub != nil {
+		for name, instance := range cfg.GitHub.Instances {
+			if instance.Timeout == "" {
+				instance.Timeout = "30s"
+			}
+			cfg.GitHub.Instances[name] = instance
+		}
+	}
 }
 
 func resolveSecrets(cfg *Config) error {
@@ -182,6 +257,34 @@ func resolveSecrets(cfg *Config) error {
 					return err
 				}
 				token.Token = value
+			}
+		}
+	}
+
+	if cfg.Developer != nil {
+		if cfg.Developer.Engine.CloudTokenFile != "" || cfg.Developer.Engine.CloudTokenEnv != "" {
+			token, err := secretref.Resolve(cfg.Developer.Engine.CloudTokenFile, cfg.Developer.Engine.CloudTokenEnv, "", "developer Dagger Cloud token")
+			if err != nil {
+				return err
+			}
+			cfg.Developer.Engine.CloudToken = token
+		}
+		for host, entry := range cfg.Developer.Engine.RegistryAuth {
+			password, err := secretref.Resolve(entry.PasswordFile, entry.PasswordEnv, "", "developer registry password for "+host)
+			if err != nil {
+				return err
+			}
+			entry.Password = password
+			cfg.Developer.Engine.RegistryAuth[host] = entry
+		}
+		if cfg.Developer.GitHub != nil {
+			for name, instance := range cfg.Developer.GitHub.Instances {
+				token, err := secretref.Resolve(instance.TokenFile, instance.TokenEnv, "", "developer GitHub token for "+name)
+				if err != nil {
+					return err
+				}
+				instance.Token = token
+				cfg.Developer.GitHub.Instances[name] = instance
 			}
 		}
 	}

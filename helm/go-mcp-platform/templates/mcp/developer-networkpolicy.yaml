@@ -1,0 +1,57 @@
+{{- $root := . -}}
+{{- $cfg := index .Values.mcpServers "developer" -}}
+{{- if and $cfg.enabled $cfg.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "go-mcp-platform.fullname" $root }}-developer
+  labels:
+    {{- include "go-mcp-platform.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: developer
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "go-mcp-platform.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: developer
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- with $root.Values.mcp.networkPolicy.mcpClientSelector }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+    {{- else }}
+    - ports:
+        - port: 8080
+          protocol: TCP
+    {{- end }}
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- if and $root.Values.mcp.approval.enabled (not $cfg.github.readOnly) }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "go-mcp-platform.selectorLabels" $root | nindent 14 }}
+              app.kubernetes.io/component: approval
+      ports:
+        - port: 8080
+          protocol: TCP
+    {{- end }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+{{- end }}

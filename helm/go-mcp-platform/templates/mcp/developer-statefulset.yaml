@@ -1,0 +1,229 @@
+{{- $root := . -}}
+{{- $cfg := index .Values.mcpServers "developer" -}}
+{{- if $cfg.enabled }}
+{{- $sa := include "go-mcp-platform.serviceAccountName" (dict "root" $root "component" "developer" "serviceAccount" $root.Values.mcp.serviceAccount) }}
+{{- $secretName := include "go-mcp-platform.developerSecretName" $root }}
+{{- $sidecar := eq $cfg.engine.mode "sidecar" }}
+{{- $runnerHost := $cfg.engine.runnerHost }}
+{{- if and (not $runnerHost) $sidecar }}{{ $runnerHost = "tcp://127.0.0.1:8081" }}{{ end }}
+{{- $approval := and $root.Values.mcp.approval.enabled (not $cfg.github.readOnly) }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "go-mcp-platform.fullname" $root }}-developer
+  labels:
+    {{- include "go-mcp-platform.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: developer
+spec:
+  serviceName: {{ include "go-mcp-platform.fullname" $root }}-developer
+  {{- if not $cfg.autoscaling.enabled }}
+  replicas: {{ $cfg.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "go-mcp-platform.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: developer
+  template:
+    metadata:
+      labels:
+        {{- include "go-mcp-platform.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: developer
+      {{- with $cfg.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ $sa }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with $root.Values.mcp.podSecurityContext }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: mcp
+          image: {{ include "go-mcp-platform.image" (dict "root" $root "image" $cfg.image) }}
+          imagePullPolicy: {{ $cfg.image.pullPolicy }}
+          args:
+            - --config
+            - /etc/go-mcp-platform/config.yaml
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: ops
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: XDG_CACHE_HOME
+              value: /tmp/cache
+            - name: HOME
+              value: /tmp
+            {{- if $runnerHost }}
+            - name: _EXPERIMENTAL_DAGGER_RUNNER_HOST
+              value: {{ $runnerHost | quote }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            {{- with $root.Values.mcp.securityContext }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ops
+          resources:
+            {{- toYaml $cfg.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/go-mcp-platform/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /tmp/cache
+            - name: developer
+              mountPath: /etc/go-mcp-platform/secrets/developer
+              readOnly: true
+            {{- if $cfg.engine.cloudTokenExistingSecret }}
+            - name: developer-cloud
+              mountPath: /etc/go-mcp-platform/secrets/developer-cloud
+              readOnly: true
+            {{- end }}
+            {{- if $root.Values.mcp.auth.enabled }}
+            - name: auth
+              mountPath: /etc/go-mcp-platform/secrets/auth
+              readOnly: true
+            {{- end }}
+            {{- if $approval }}
+            - name: receipt
+              mountPath: /etc/go-mcp-platform/secrets/receipt-secret
+              subPath: {{ $root.Values.approval.receipt.secretKey }}
+              readOnly: true
+            {{- end }}
+            - name: workspace
+              mountPath: {{ $cfg.workspaceRoot | quote }}
+        {{- if $sidecar }}
+        - name: dagger-engine
+          image: {{ include "go-mcp-platform.image" (dict "root" $root "image" $cfg.engine.sidecar.image) }}
+          imagePullPolicy: {{ $cfg.engine.sidecar.image.pullPolicy }}
+          args:
+            - --listen
+            - tcp://0.0.0.0:8081
+          ports:
+            - name: engine
+              containerPort: 8081
+              protocol: TCP
+          securityContext:
+            privileged: true
+          resources:
+            {{- toYaml $cfg.engine.sidecar.resources | nindent 12 }}
+          env:
+            {{- with $cfg.engine.sidecar.proxy.httpProxy }}
+            - name: HTTP_PROXY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $cfg.engine.sidecar.proxy.httpsProxy }}
+            - name: HTTPS_PROXY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $cfg.engine.sidecar.proxy.noProxy }}
+            - name: NO_PROXY
+              value: {{ . | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: engine-cache
+              mountPath: /var/lib/dagger
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "go-mcp-platform.fullname" $root }}-developer
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        - name: developer
+          secret:
+            secretName: {{ $secretName }}
+        {{- if $cfg.engine.cloudTokenExistingSecret }}
+        - name: developer-cloud
+          secret:
+            secretName: {{ $cfg.engine.cloudTokenExistingSecret }}
+        {{- end }}
+        {{- if $root.Values.mcp.auth.enabled }}
+        - name: auth
+          secret:
+            secretName: {{ include "go-mcp-platform.authSecretName" $root }}
+        {{- end }}
+        {{- if $approval }}
+        - name: receipt
+          secret:
+            secretName: {{ include "go-mcp-platform.receiptSecretName" $root }}
+        {{- end }}
+        {{- if not $cfg.persistence.enabled }}
+        - name: workspace
+          emptyDir: {}
+        {{- end }}
+        {{- if and $sidecar (not $cfg.engine.sidecar.persistence.enabled) }}
+        - name: engine-cache
+          emptyDir: {}
+        {{- end }}
+      {{- with $cfg.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if or $cfg.persistence.enabled (and $sidecar $cfg.engine.sidecar.persistence.enabled) }}
+  volumeClaimTemplates:
+    {{- if $cfg.persistence.enabled }}
+    - metadata:
+        name: workspace
+      spec:
+        accessModes:
+          - {{ $cfg.persistence.accessMode }}
+        {{- if $cfg.persistence.storageClass }}
+        storageClassName: {{ $cfg.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $cfg.persistence.size }}
+    {{- end }}
+    {{- if and $sidecar $cfg.engine.sidecar.persistence.enabled }}
+    - metadata:
+        name: engine-cache
+      spec:
+        accessModes:
+          - {{ $cfg.engine.sidecar.persistence.accessMode }}
+        {{- if $cfg.engine.sidecar.persistence.storageClass }}
+        storageClassName: {{ $cfg.engine.sidecar.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $cfg.engine.sidecar.persistence.size }}
+    {{- end }}
+  {{- end }}
+{{- end }}

@@ -179,6 +179,63 @@ Enforcement at two points:
   and checks category + instance + tool pattern. Tools without an instance
   argument (e.g. `kubernetes_cluster_list`) are checked at category level only.
 
+### Per-identity tools (`ToolsFor`)
+
+`Config.ToolsFor` and `Config.WriteToolsFor` build the tool set from the
+authenticated identity at construction time. They take precedence over
+`Tools`/`WriteTools` and are called once per distinct identity; the result is
+cached with the per-identity server. Setting `ToolsFor` forces identity-keyed
+server caching even when no RBAC policy is configured, so two identities never
+share a tool set (or a workspace). This is what the developer family uses to
+bind each identity to its own workspace root.
+
+```go
+cfg := &mcpserver.Config{
+    InstanceParam: "instance",
+    ToolsFor: func(ctx context.Context, id *mcpserver.Identity) ([]tool.InvokableTool, error) {
+        return buildToolsFor(id), nil
+    },
+    WriteToolsFor: func(ctx context.Context, id *mcpserver.Identity) ([]string, error) {
+        return writeToolNamesFor(id), nil
+    },
+}
+```
+
+### Prompts and resources
+
+`Config.Prompts`/`Resources` (and the per-identity `PromptsFor`/`ResourcesFor`)
+expose MCP prompts and resources. They are **read** operations: RBAC reuses
+`Authorizer.Authorize(id, name, "", false)`, matching the prompt/resource name
+against `AccessRule.Tools` (e.g. `developer_*`). The filter is applied at
+registration time (`prompts/list`, `resources/list`) and again inside the
+handler (`prompts/get`, `resources/read`). Every read emits a
+`safety.AuditEvent` with `PhaseRead` and `ToolName` `prompt:<name>` or
+`resource:<uri>`.
+
+```go
+cfg := &mcpserver.Config{
+    InstanceParam: "instance",
+    Prompts: []mcpserver.PromptSpec{{
+        Name: "developer_bootstrap",
+        Arguments: []mcpserver.PromptArgumentSpec{{Name: "language", Required: true}},
+        Handler: func(ctx context.Context, id *mcpserver.Identity, args map[string]string) (string, error) {
+            return renderBootstrap(args["language"]), nil
+        },
+    }},
+    Resources: []mcpserver.ResourceSpec{{
+        URI:  "developer://agents/golang",
+        Name: "developer_agents_golang",
+        Handler: func(ctx context.Context, id *mcpserver.Identity, uri string) (string, error) {
+            return agentsGolang, nil
+        },
+    }},
+}
+```
+
+`ResourceSpec.URI` must be an absolute URI with a scheme; it is validated before
+`AddResource` (which panics on a bad URI). `MIMEType` defaults to
+`text/markdown`.
+
 ### Approval (write tools)
 
 Real execution of a write tool requires a human decision. The model-supplied

@@ -5,15 +5,18 @@ approval service are packaged, configured, deployed and validated.
 
 ## Overview
 
-Two container images are produced from one Go module:
+Three container images are produced from one Go module:
 
 | Image | Entrypoint | Purpose |
 |---|---|---|
-| `go-mcp-platform/mcp` | `cmd/mcp-server` | One MCP server per tool family (`kubernetes`, `argocd`, `prometheus`, `grafana`) |
+| `go-mcp-platform/mcp` | `cmd/mcp-server` | One MCP server per tool family (`kubernetes`, `argocd`, `prometheus`, `grafana`, `developer`) |
 | `go-mcp-platform/approval` | `cmd/approval-server` | Out-of-band human approval service with the embedded Nuxt UI |
+| `go-mcp-platform/developer` | `cmd/mcp-server` | The developer family image; adds the pinned Dagger CLI required by the SDK's runner-host path |
 
-Both images are built from `distroless/static-debian12:nonroot`, run as UID
-65532, and expose no shell. Probes are therefore HTTP `httpGet` probes.
+All three images are built from `distroless/static-debian12:nonroot`, run as UID
+65532, and expose no shell. Probes are therefore HTTP `httpGet` probes. The
+developer image also carries a statically linked Dagger CLI and a writable
+`XDG_CACHE_HOME` (`/tmp/cache`).
 
 ## Deployment topology
 
@@ -23,10 +26,12 @@ graph LR
   client --> mcpArgo[argocd MCP]
   client --> mcpProm[prometheus MCP]
   client --> mcpGraf[grafana MCP]
+  client --> mcpDev[developer MCP StatefulSet]
 
   mcpK8s -->|write approval| approval[approval service]
   mcpArgo -->|write approval| approval
   mcpGraf -->|write approval| approval
+  mcpDev -->|write approval| approval
 
   approval -->|file / redis / postgresql / opensearch| store[(approval store)]
   human[human browser] -->|OIDC + cookie| approval
@@ -35,6 +40,8 @@ graph LR
   mcpArgo -->|HTTPS| argo[(ArgoCD)]
   mcpProm -->|HTTPS| prom[(Prometheus)]
   mcpGraf -->|HTTPS| graf[(Grafana)]
+  mcpDev -->|privileged sidecar| engine[(Dagger engine)]
+  mcpDev -->|HTTPS| gh[(GitHub)]
 ```
 
 MCP Services are `ClusterIP` only. The unauthenticated operations port `9090`
@@ -63,7 +70,10 @@ an argument or an environment variable in the Kubernetes path.
 ## Helm chart
 
 `helm/go-mcp-platform` deploys the approval service and one Deployment, Service,
-ConfigMap, Secret and ServiceAccount per enabled MCP family.
+ConfigMap, Secret and ServiceAccount per enabled MCP family. The developer
+family is a **StatefulSet** instead of a Deployment: both the workspace and the
+engine cache need stable per-replica PVCs via `volumeClaimTemplates`. In
+`sidecar` mode it runs a privileged `dagger-engine` container in the same pod.
 
 Security defaults:
 
@@ -88,6 +98,17 @@ The chart fails at render time when:
   filesystem is read-only and no volume is mounted at the store path).
 - A required `existingSecret` key is missing (checked with `lookup` when a
   cluster is available).
+- `developer.engine.mode=cloud` or `dagger-kubernetes` has no Dagger Cloud
+  token.
+- `developer.engine.mode=dagger-kubernetes` has no `cloudURL`.
+- `developer.engine.mode=sidecar` disables engine persistence without the
+  explicit cold-cache acknowledgement.
+- `developer.egress.allowLocalNetwork=true` without
+  `egress.acknowledgeLocalNetworkRisk=true`.
+- `developer.replicaCount > 1` or HPA is enabled with a `ReadWriteOnce`
+  workspace PVC.
+- Developer approval is enabled without `github.existingSecret` (which must
+  contain an `approval-token` key) and `github.approvalTokenHash`.
 
 ## CI pipeline
 
@@ -105,7 +126,7 @@ graph TD
   vuln --> components[check_components.sh]
   components --> ui[UI build + dist staleness]
   ui --> lintImages[hadolint both Dockerfiles]
-  lintImages --> images[Build both images]
+  lintImages --> images[Build all three images]
   images --> helmLint[helm lint]
   helmLint --> helmDrift[Schema/README drift]
   helmDrift --> helmTemplate[helm template + kubeconform + guards]
@@ -170,16 +191,19 @@ existing `components/tool/*` configs and calls the matching
 `disaster37/dagger-library-go@2.0.20` pinned to commit
 `e205189be6eba617e7bcc870db2e73a04171f38e`. The module exposes granular
 functions (`lint`, `vet`, `build`, `test`, `vulncheck`, `check-components`,
-`ui`, `lint-images`, `image-mcp`, `image-approval`, `helm-lint`,
+`ui`, `lint-images`, `image-mcp`, `image-approval`, `image-developer`, `helm-lint`,
 `helm-template`, `helm-schema`, `helm-docs`, `helm-publish`, `ci`).
 
 ### Image build
 
-`Dockerfile.mcp` and `Dockerfile.approval` pin every base image by tag and
-digest. The approval image builds the Nuxt UI in a Node stage and copies the
-result over the committed `ui/dist` before `go build`, so the embedded UI is
-always built from source. The Dagger `ui` function separately asserts the
-committed `dist` is not stale.
+`Dockerfile.mcp`, `Dockerfile.approval` and `Dockerfile.developer` pin every
+base image by tag and digest. The approval image builds the Nuxt UI in a Node
+stage and copies the result over the committed `ui/dist` before `go build`, so
+the embedded UI is always built from source. The Dagger `ui` function separately
+asserts the committed `dist` is not stale. `Dockerfile.developer` downloads the
+pinned Dagger CLI, verifies its SHA-256 checksum from the release
+`checksums.txt`, and copies the statically linked binary into the distroless
+runtime image.
 
 ### Chart secret wiring
 
@@ -189,3 +213,12 @@ SHA-256 hash is written to the approval credential file as
 `<family>=sha256:<hash>@<instances>`. `lookup` preserves generated values across
 upgrades. `existingSecret` is supported for every secret-bearing component and
 is the recommended production path (ExternalSecrets/SealedSecrets).
+
+The developer family is special: because its approval token must be shared
+between the developer Secret and the approval credential file, and Helm cannot
+share a generated value across templates, the chart requires
+`developer.github.existingSecret` (containing `approval-token`) plus
+`developer.github.approvalTokenHash` whenever approval is enabled and
+`github.readOnly=false`. The developer Secret template generates the GitHub
+tokens, Dagger Cloud token and registry passwords when no existing Secret is
+provided.

@@ -33,9 +33,9 @@ cmd/  ->  internal/  ->  pkg/  ->  github.com/webcenter-fr/eino-ext
 ### Consuming eino-ext
 
 The platform consumes `github.com/webcenter-fr/eino-ext` as a normal Go module
-dependency. The seven packages imported across the boundary are
-`components/tool/{kubernetes,argocd,prometheus,grafana}` and
-`libs/toolkit/{safety,validate,osclient}`.
+dependency. The packages imported across the boundary are
+`components/tool/{kubernetes,argocd,prometheus,grafana,github}` and
+`libs/toolkit/{safety,validate,osclient,dagger,egress,profile,workspace,fileutil}`.
 
 For local development against a sibling checkout, create a **gitignored**
 `go.work` at the repository root:

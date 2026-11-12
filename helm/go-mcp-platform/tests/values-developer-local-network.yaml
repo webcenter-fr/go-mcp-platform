@@ -1,0 +1,10 @@
+mcpServers:
+  developer:
+    enabled: true
+    egress:
+      allowLocalNetwork: true
+    github:
+      existingSecret: developer-creds
+      approvalTokenHash: "0000000000000000000000000000000000000000000000000000000000000000"
+      instances:
+        corp: {}

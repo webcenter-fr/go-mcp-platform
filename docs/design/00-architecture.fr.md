@@ -67,7 +67,7 @@ vers l'extérieur.
 
 ## 3. Frontière de module
 
-La plateforme importe exactement sept paquets eino-ext :
+La plateforme importe les paquets eino-ext suivants :
 
 | Paquet | Utilisé pour |
 |---|---|
@@ -75,9 +75,15 @@ La plateforme importe exactement sept paquets eino-ext :
 | `components/tool/argocd` | Famille d'outils ArgoCD (`argocdtool.Configs`) |
 | `components/tool/prometheus` | Famille d'outils Prometheus (`promtool.Configs`) |
 | `components/tool/grafana` | Famille d'outils Grafana (`grafanatool.Configs`) |
+| `components/tool/github` | Famille d'outils GitHub (`githubtool.Configs`, `NewAllTools`, `WriteToolNames`) |
 | `libs/toolkit/safety` | Primitives de porte, politique, audit et autorisation |
 | `libs/toolkit/validate` | Helper partagé `validate.Struct` |
 | `libs/toolkit/osclient` | Client OpenSearch utilisé par le store d'approbation |
+| `libs/toolkit/dagger` | Client Dagger paresseux, options de conteneur, export du workspace |
+| `libs/toolkit/egress` | Politique d'egress et proxy HTTP CONNECT |
+| `libs/toolkit/profile` | Détection des marqueurs de projet et sélection de l'image de base |
+| `libs/toolkit/workspace` | Disposition session/workspace et résolution de chemins sans symlink |
+| `libs/toolkit/fileutil` | Validation des répertoires racines et des segments de chemin |
 
 `libs/toolkit/confirm` est utilisé transitivement par les paquets d'outils,
 jamais importé directement par le code de la plateforme.
@@ -155,7 +161,30 @@ L'application a lieu à deux endroits :
   stateless rejette les requêtes serveur→client, ce qui casserait l'approbation
   par elicitation.
 
-### 4.5 Pourquoi le LLM ne peut pas s'auto-approuver
+### 4.5 Ensembles d'outils par identité (`ToolsFor`)
+
+`Config.ToolsFor` et `Config.WriteToolsFor` permettent à une famille de
+construire son ensemble d'outils à partir de l'identité authentifiée au moment
+de la construction. Ils priment sur `Tools`/`WriteTools` et sont appelés une
+fois par identité distincte ; le résultat est mis en cache avec le serveur par
+identité. Définir `ToolsFor` force un cache de serveurs indexé par identité même
+sans politique RBAC, donc deux identités ne partagent jamais un ensemble
+d'outils (ni un workspace). La famille developer utilise ce hook pour lier
+chaque identité à `<WorkspaceRoot>/<sha256(subject)[:16]>`.
+
+### 4.6 Prompts et ressources
+
+`Config.Prompts`/`Resources` (et leurs équivalents par identité `PromptsFor`/
+`ResourcesFor`) exposent des prompts et ressources MCP. Ce sont des opérations
+de **lecture** : le RBAC réutilise `Authorizer.Authorize(id, name, "", false)`,
+en faisant correspondre le nom du prompt/de la ressource à `AccessRule.Tools`
+(par exemple `developer_*`). Le filtre est appliqué à l'enregistrement
+(`prompts/list`, `resources/list`) puis dans le handler (`prompts/get`,
+`resources/read`), comme le double contrôle tools/list + tools/call. Chaque
+lecture émet un `safety.AuditEvent` avec `PhaseRead` et `ToolName`
+`prompt:<name>` ou `resource:<uri>`.
+
+### 4.7 Pourquoi le LLM ne peut pas s'auto-approuver
 
 L'exécution réelle d'un outil d'écriture requiert une décision humaine.
 L'argument `confirmed=true` fourni par le modèle n'est **jamais** une source
@@ -241,6 +270,9 @@ func kubernetes.NewServer(ctx context.Context, configs k8stool.Configs, scheme *
 func argocd.NewServer(ctx context.Context, configs argocdtool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
 func prometheus.NewServer(ctx context.Context, configs promtool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
 func grafana.NewServer(ctx context.Context, configs grafanatool.Configs, cfg *mcpserver.Config) (*mcpserver.Server, error)
+func developer.NewServer(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, error)
+func developer.NewServerWithRunner(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, io.Closer, error)
+func developer.WriteToolNames(cfg *developer.Config) []string
 
 // internal/serverconfig — câblage des binaires
 func Load(path string, overrides map[string]any) (*Config, error)
@@ -276,7 +308,25 @@ une divergence. Le reçu signé porte le hash, donc approuver X ne peut jamais
 exécuter Y. Voir [`01-mcp-hard-approval.fr.md`](./01-mcp-hard-approval.fr.md)
 pour le flux complet.
 
-### 7.3 Câblage des binaires
+### 7.3 Les valeurs de session adk sont inaccessibles depuis MCP
+
+`workspace.Layout` et `github.Config.CloneDir` résolvent les chemins par
+session via `fileutil.SessionFromContext` → `adk.GetSessionValue(ctx, key)`. Un
+handler d'outil MCP ne peut jamais peupler une session adk :
+`adk.AddSessionValue` est un no-op silencieux sans contexte de run adk, et les
+seuls constructeurs sont non exportés. Avec `RequireSession: true`, chaque appel
+échoue ; avec `RequireSession: false`, chaque identité résout le namespace
+littéral `default`, donc le shell de l'utilisateur A pourrait lire le code
+privé cloné de l'utilisateur B.
+
+La famille developer dérive donc la racine du workspace de l'**identité
+authentifiée** (côté serveur, non falsifiable) et construit les outils de cette
+identité via `ToolsFor`. Les outils GitHub sont construits avec `CloneDir` égal
+à la racine de l'identité et `RequireSession: false` ; le segment de session
+`default` à l'intérieur de cette racine est sans danger puisque la racine
+elle-même est propre à l'identité.
+
+### 7.4 Câblage des binaires
 
 `internal/serverconfig.Load` construit une instance viper avec le support
 d'environnement `MCP_PLATFORM_*`, applique les valeurs par défaut, lit le

@@ -705,6 +705,500 @@
                         }
                     }
                 },
+                "developer": {
+                    "type": "object",
+                    "properties": {
+                        "affinity": {
+                            "type": "object",
+                            "description": "Developer MCP affinity",
+                            "default": {}
+                        },
+                        "allowedImages": {
+                            "type": "array",
+                            "description": "Allowlist of permitted base images",
+                            "default": [],
+                            "items": {}
+                        },
+                        "autoscaling": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable the developer MCP HPA",
+                                    "default": false
+                                },
+                                "maxReplicas": {
+                                    "type": "integer",
+                                    "description": "HPA maximum replicas",
+                                    "default": 3
+                                },
+                                "minReplicas": {
+                                    "type": "integer",
+                                    "description": "HPA minimum replicas",
+                                    "default": 1
+                                },
+                                "targetCPUUtilizationPercentage": {
+                                    "type": "integer",
+                                    "description": "HPA CPU target",
+                                    "default": 80
+                                }
+                            }
+                        },
+                        "baseImage": {
+                            "type": "string",
+                            "description": "Fallback OCI base image",
+                            "default": "alpine:3.20"
+                        },
+                        "containerUser": {
+                            "type": "string",
+                            "description": "Container user (never root)",
+                            "default": "1000:1000"
+                        },
+                        "defaultTimeout": {
+                            "type": "string",
+                            "description": "Default command timeout",
+                            "default": "5m"
+                        },
+                        "egress": {
+                            "type": "object",
+                            "properties": {
+                                "acknowledgeLocalNetworkRisk": {
+                                    "type": "boolean",
+                                    "description": "Acknowledge the local-network risk",
+                                    "default": false
+                                },
+                                "allowCIDRs": {
+                                    "type": "array",
+                                    "description": "Allowed egress CIDRs",
+                                    "default": [],
+                                    "items": {}
+                                },
+                                "allowHosts": {
+                                    "type": "array",
+                                    "description": "Allowed egress hostnames (empty = built-in registry allowlist)",
+                                    "default": [],
+                                    "items": {}
+                                },
+                                "allowLocalNetwork": {
+                                    "type": "boolean",
+                                    "description": "DANGEROUS: allow local/private network egress",
+                                    "default": false
+                                },
+                                "defaultDeny": {
+                                    "type": "boolean",
+                                    "description": "Deny all egress except the allowlist",
+                                    "default": true
+                                }
+                            }
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Enable the developer MCP server (DANGEROUS: needs a Dagger engine)",
+                            "default": false
+                        },
+                        "engine": {
+                            "type": "object",
+                            "properties": {
+                                "cliPath": {
+                                    "type": "string",
+                                    "description": "Dagger CLI binary path",
+                                    "default": "/usr/local/bin/dagger"
+                                },
+                                "cloudToken": {
+                                    "type": "string",
+                                    "description": "Dagger Cloud token (stored in a Secret)",
+                                    "default": ""
+                                },
+                                "cloudTokenExistingSecret": {
+                                    "type": "string",
+                                    "description": "Existing Secret containing the Dagger Cloud token",
+                                    "default": ""
+                                },
+                                "cloudTokenSecretKey": {
+                                    "type": "string",
+                                    "description": "Key in the Dagger Cloud token Secret",
+                                    "default": "token"
+                                },
+                                "cloudURL": {
+                                    "type": "string",
+                                    "description": "Dagger Cloud / supervisor base URL",
+                                    "default": ""
+                                },
+                                "engineVersion": {
+                                    "type": "string",
+                                    "description": "Pinned Dagger engine version",
+                                    "default": ""
+                                },
+                                "mode": {
+                                    "type": "string",
+                                    "description": "Engine mode: sidecar, cloud or dagger-kubernetes",
+                                    "default": "sidecar"
+                                },
+                                "registryAuth": {
+                                    "type": "object",
+                                    "description": "Registry pull credentials keyed by hostname",
+                                    "default": {}
+                                },
+                                "runnerHost": {
+                                    "type": "string",
+                                    "description": "Dagger runner host override",
+                                    "default": ""
+                                },
+                                "sidecar": {
+                                    "type": "object",
+                                    "properties": {
+                                        "image": {
+                                            "type": "object",
+                                            "properties": {
+                                                "pullPolicy": {
+                                                    "type": "string",
+                                                    "description": "Dagger engine image pull policy",
+                                                    "default": "IfNotPresent"
+                                                },
+                                                "registry": {
+                                                    "type": "string",
+                                                    "description": "Dagger engine image registry",
+                                                    "default": "registry.dagger.io"
+                                                },
+                                                "repository": {
+                                                    "type": "string",
+                                                    "description": "Dagger engine image repository",
+                                                    "default": "engine"
+                                                },
+                                                "tag": {
+                                                    "type": "string",
+                                                    "description": "Dagger engine image tag",
+                                                    "default": "v0.21.7"
+                                                }
+                                            }
+                                        },
+                                        "persistence": {
+                                            "type": "object",
+                                            "properties": {
+                                                "accessMode": {
+                                                    "type": "string",
+                                                    "description": "Engine cache PVC access mode",
+                                                    "default": "ReadWriteOnce"
+                                                },
+                                                "acknowledgeColdCache": {
+                                                    "type": "boolean",
+                                                    "description": "Acknowledge a cold engine cache per restart",
+                                                    "default": false
+                                                },
+                                                "enabled": {
+                                                    "type": "boolean",
+                                                    "description": "Enable the engine cache PVC",
+                                                    "default": true
+                                                },
+                                                "size": {
+                                                    "type": "string",
+                                                    "description": "Engine cache PVC size",
+                                                    "default": "50Gi"
+                                                },
+                                                "storageClass": {
+                                                    "type": "string",
+                                                    "description": "Engine cache PVC storage class",
+                                                    "default": ""
+                                                }
+                                            }
+                                        },
+                                        "proxy": {
+                                            "type": "object",
+                                            "properties": {
+                                                "httpProxy": {
+                                                    "type": "string",
+                                                    "description": "HTTP proxy for the engine",
+                                                    "default": ""
+                                                },
+                                                "httpsProxy": {
+                                                    "type": "string",
+                                                    "description": "HTTPS proxy for the engine",
+                                                    "default": ""
+                                                },
+                                                "noProxy": {
+                                                    "type": "string",
+                                                    "description": "NO_PROXY for the engine",
+                                                    "default": ""
+                                                }
+                                            }
+                                        },
+                                        "resources": {
+                                            "type": "object",
+                                            "properties": {
+                                                "limits": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "cpu": {
+                                                            "type": "string",
+                                                            "description": "Dagger engine CPU limit",
+                                                            "default": "4"
+                                                        },
+                                                        "memory": {
+                                                            "type": "string",
+                                                            "description": "Dagger engine memory limit",
+                                                            "default": "8Gi"
+                                                        }
+                                                    }
+                                                },
+                                                "requests": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "cpu": {
+                                                            "type": "string",
+                                                            "description": "Dagger engine CPU request",
+                                                            "default": "500m"
+                                                        },
+                                                        "memory": {
+                                                            "type": "string",
+                                                            "description": "Dagger engine memory request",
+                                                            "default": "2Gi"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "github": {
+                            "type": "object",
+                            "properties": {
+                                "approvalTokenHash": {
+                                    "type": "string",
+                                    "description": "Approval token hash when existingSecret is used",
+                                    "default": ""
+                                },
+                                "existingSecret": {
+                                    "type": "string",
+                                    "description": "Existing Secret containing the developer credentials",
+                                    "default": ""
+                                },
+                                "instances": {
+                                    "type": "object",
+                                    "description": "GitHub instances",
+                                    "default": {}
+                                },
+                                "readOnly": {
+                                    "type": "boolean",
+                                    "description": "Expose only read-only GitHub tools",
+                                    "default": false
+                                }
+                            }
+                        },
+                        "image": {
+                            "type": "object",
+                            "properties": {
+                                "pullPolicy": {
+                                    "type": "string",
+                                    "description": "Developer image pull policy",
+                                    "default": "IfNotPresent"
+                                },
+                                "registry": {
+                                    "type": "string",
+                                    "description": "Developer image registry",
+                                    "default": "ghcr.io"
+                                },
+                                "repository": {
+                                    "type": "string",
+                                    "description": "Developer image repository",
+                                    "default": "webcenter-fr/go-mcp-platform/developer"
+                                },
+                                "tag": {
+                                    "type": "string",
+                                    "description": "Developer image tag (defaults to Chart.AppVersion)",
+                                    "default": ""
+                                }
+                            }
+                        },
+                        "imageOverrides": {
+                            "type": "object",
+                            "description": "Per-profile base image overrides",
+                            "default": {}
+                        },
+                        "ingress": {
+                            "type": "object",
+                            "properties": {
+                                "annotations": {
+                                    "type": "object",
+                                    "description": "Ingress annotations",
+                                    "default": {}
+                                },
+                                "className": {
+                                    "type": "string",
+                                    "description": "Ingress class name",
+                                    "default": ""
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable the developer MCP Ingress",
+                                    "default": false
+                                },
+                                "host": {
+                                    "type": "string",
+                                    "description": "Ingress host",
+                                    "default": ""
+                                },
+                                "tls": {
+                                    "type": "object",
+                                    "properties": {
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "description": "Enable Ingress TLS",
+                                            "default": false
+                                        },
+                                        "secretName": {
+                                            "type": "string",
+                                            "description": "Ingress TLS secret name",
+                                            "default": ""
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "maxConcurrentExecs": {
+                            "type": "integer",
+                            "description": "Maximum simultaneous executions",
+                            "default": 4
+                        },
+                        "maxOutputBytes": {
+                            "type": "integer",
+                            "description": "Maximum captured output bytes",
+                            "default": 256000
+                        },
+                        "maxTimeout": {
+                            "type": "string",
+                            "description": "Maximum command timeout",
+                            "default": "15m"
+                        },
+                        "networkPolicy": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable the dedicated developer NetworkPolicy",
+                                    "default": true
+                                }
+                            }
+                        },
+                        "nodeSelector": {
+                            "type": "object",
+                            "description": "Developer MCP node selector",
+                            "default": {}
+                        },
+                        "persistence": {
+                            "type": "object",
+                            "properties": {
+                                "accessMode": {
+                                    "type": "string",
+                                    "description": "Workspace PVC access mode",
+                                    "default": "ReadWriteOnce"
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable the workspace PVC",
+                                    "default": true
+                                },
+                                "size": {
+                                    "type": "string",
+                                    "description": "Workspace PVC size",
+                                    "default": "20Gi"
+                                },
+                                "storageClass": {
+                                    "type": "string",
+                                    "description": "Workspace PVC storage class",
+                                    "default": ""
+                                }
+                            }
+                        },
+                        "podAnnotations": {
+                            "type": "object",
+                            "description": "Developer MCP pod annotations",
+                            "default": {}
+                        },
+                        "podDisruptionBudget": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable the developer MCP PDB",
+                                    "default": false
+                                },
+                                "minAvailable": {
+                                    "type": "integer",
+                                    "description": "PDB minAvailable",
+                                    "default": 1
+                                }
+                            }
+                        },
+                        "replicaCount": {
+                            "type": "integer",
+                            "description": "Developer MCP replica count",
+                            "default": 1
+                        },
+                        "resources": {
+                            "type": "object",
+                            "description": "Developer MCP resource requests and limits",
+                            "default": {}
+                        },
+                        "service": {
+                            "type": "object",
+                            "properties": {
+                                "port": {
+                                    "type": "integer",
+                                    "description": "Developer MCP Service port",
+                                    "default": 8080
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "description": "Developer MCP Service type",
+                                    "default": "ClusterIP"
+                                }
+                            }
+                        },
+                        "serviceAccount": {
+                            "type": "object",
+                            "properties": {
+                                "annotations": {
+                                    "type": "object",
+                                    "description": "Developer ServiceAccount annotations",
+                                    "default": {}
+                                },
+                                "create": {
+                                    "type": "boolean",
+                                    "description": "Create the developer ServiceAccount",
+                                    "default": true
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": "Developer ServiceAccount name override",
+                                    "default": ""
+                                }
+                            }
+                        },
+                        "tolerations": {
+                            "type": "array",
+                            "description": "Developer MCP tolerations",
+                            "default": [],
+                            "items": {}
+                        },
+                        "workspaceGCInterval": {
+                            "type": "string",
+                            "description": "Workspace GC interval",
+                            "default": "1h"
+                        },
+                        "workspaceRoot": {
+                            "type": "string",
+                            "description": "Host root for per-identity workspaces",
+                            "default": "/var/lib/go-mcp-platform/workspaces"
+                        },
+                        "workspaceTTL": {
+                            "type": "string",
+                            "description": "Idle workspace TTL",
+                            "default": "24h"
+                        }
+                    }
+                },
                 "grafana": {
                     "type": "object",
                     "properties": {

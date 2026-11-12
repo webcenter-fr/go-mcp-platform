@@ -207,3 +207,81 @@ Deploys the go-mcp-platform MCP servers and the standalone approval service.
 | `mcpServers.grafana.nodeSelector` | Grafana MCP node selector | `{}` |
 | `mcpServers.grafana.tolerations` | Grafana MCP tolerations | `[]` |
 | `mcpServers.grafana.affinity` | Grafana MCP affinity | `{}` |
+| `mcpServers.developer.enabled` | Enable the developer MCP server (DANGEROUS: needs a Dagger engine) | `false` |
+| `mcpServers.developer.image.registry` | Developer image registry | `ghcr.io` |
+| `mcpServers.developer.image.repository` | Developer image repository | `webcenter-fr/go-mcp-platform/developer` |
+| `mcpServers.developer.image.tag` | Developer image tag (defaults to Chart.AppVersion) | `` |
+| `mcpServers.developer.image.pullPolicy` | Developer image pull policy | `IfNotPresent` |
+| `mcpServers.developer.workspaceRoot` | Host root for per-identity workspaces | `/var/lib/go-mcp-platform/workspaces` |
+| `mcpServers.developer.baseImage` | Fallback OCI base image | `alpine:3.20` |
+| `mcpServers.developer.imageOverrides` | Per-profile base image overrides | `{}` |
+| `mcpServers.developer.allowedImages` | Allowlist of permitted base images | `[]` |
+| `mcpServers.developer.defaultTimeout` | Default command timeout | `5m` |
+| `mcpServers.developer.maxTimeout` | Maximum command timeout | `15m` |
+| `mcpServers.developer.maxOutputBytes` | Maximum captured output bytes | `256000` |
+| `mcpServers.developer.maxConcurrentExecs` | Maximum simultaneous executions | `4` |
+| `mcpServers.developer.containerUser` | Container user (never root) | `1000:1000` |
+| `mcpServers.developer.workspaceTTL` | Idle workspace TTL | `24h` |
+| `mcpServers.developer.workspaceGCInterval` | Workspace GC interval | `1h` |
+| `mcpServers.developer.egress.defaultDeny` | Deny all egress except the allowlist | `true` |
+| `mcpServers.developer.egress.allowHosts` | Allowed egress hostnames (empty = built-in registry allowlist) | `[]` |
+| `mcpServers.developer.egress.allowCIDRs` | Allowed egress CIDRs | `[]` |
+| `mcpServers.developer.egress.allowLocalNetwork` | DANGEROUS: allow local/private network egress | `false` |
+| `mcpServers.developer.egress.acknowledgeLocalNetworkRisk` | Acknowledge the local-network risk | `false` |
+| `mcpServers.developer.engine.mode` | Engine mode: sidecar, cloud or dagger-kubernetes | `sidecar` |
+| `mcpServers.developer.engine.runnerHost` | Dagger runner host override | `` |
+| `mcpServers.developer.engine.cloudURL` | Dagger Cloud / supervisor base URL | `` |
+| `mcpServers.developer.engine.cloudToken` | Dagger Cloud token (stored in a Secret) | `` |
+| `mcpServers.developer.engine.cloudTokenExistingSecret` | Existing Secret containing the Dagger Cloud token | `` |
+| `mcpServers.developer.engine.cloudTokenSecretKey` | Key in the Dagger Cloud token Secret | `token` |
+| `mcpServers.developer.engine.engineVersion` | Pinned Dagger engine version | `` |
+| `mcpServers.developer.engine.cliPath` | Dagger CLI binary path | `/usr/local/bin/dagger` |
+| `mcpServers.developer.engine.registryAuth` | Registry pull credentials keyed by hostname | `{}` |
+| `mcpServers.developer.engine.sidecar.image.registry` | Dagger engine image registry | `registry.dagger.io` |
+| `mcpServers.developer.engine.sidecar.image.repository` | Dagger engine image repository | `engine` |
+| `mcpServers.developer.engine.sidecar.image.tag` | Dagger engine image tag | `v0.21.7` |
+| `mcpServers.developer.engine.sidecar.image.pullPolicy` | Dagger engine image pull policy | `IfNotPresent` |
+| `mcpServers.developer.engine.sidecar.resources.requests.cpu` | Dagger engine CPU request | `500m` |
+| `mcpServers.developer.engine.sidecar.resources.requests.memory` | Dagger engine memory request | `2Gi` |
+| `mcpServers.developer.engine.sidecar.resources.limits.cpu` | Dagger engine CPU limit | `4` |
+| `mcpServers.developer.engine.sidecar.resources.limits.memory` | Dagger engine memory limit | `8Gi` |
+| `mcpServers.developer.engine.sidecar.persistence.enabled` | Enable the engine cache PVC | `true` |
+| `mcpServers.developer.engine.sidecar.persistence.size` | Engine cache PVC size | `50Gi` |
+| `mcpServers.developer.engine.sidecar.persistence.storageClass` | Engine cache PVC storage class | `` |
+| `mcpServers.developer.engine.sidecar.persistence.accessMode` | Engine cache PVC access mode | `ReadWriteOnce` |
+| `mcpServers.developer.engine.sidecar.persistence.acknowledgeColdCache` | Acknowledge a cold engine cache per restart | `false` |
+| `mcpServers.developer.engine.sidecar.proxy.httpProxy` | HTTP proxy for the engine | `` |
+| `mcpServers.developer.engine.sidecar.proxy.httpsProxy` | HTTPS proxy for the engine | `` |
+| `mcpServers.developer.engine.sidecar.proxy.noProxy` | NO_PROXY for the engine | `` |
+| `mcpServers.developer.github.readOnly` | Expose only read-only GitHub tools | `false` |
+| `mcpServers.developer.github.instances` | GitHub instances | `{}` |
+| `mcpServers.developer.github.existingSecret` | Existing Secret containing the developer credentials | `` |
+| `mcpServers.developer.github.approvalTokenHash` | Approval token hash when existingSecret is used | `` |
+| `mcpServers.developer.persistence.enabled` | Enable the workspace PVC | `true` |
+| `mcpServers.developer.persistence.size` | Workspace PVC size | `20Gi` |
+| `mcpServers.developer.persistence.storageClass` | Workspace PVC storage class | `` |
+| `mcpServers.developer.persistence.accessMode` | Workspace PVC access mode | `ReadWriteOnce` |
+| `mcpServers.developer.replicaCount` | Developer MCP replica count | `1` |
+| `mcpServers.developer.service.type` | Developer MCP Service type | `ClusterIP` |
+| `mcpServers.developer.service.port` | Developer MCP Service port | `8080` |
+| `mcpServers.developer.ingress.enabled` | Enable the developer MCP Ingress | `false` |
+| `mcpServers.developer.ingress.className` | Ingress class name | `` |
+| `mcpServers.developer.ingress.host` | Ingress host | `` |
+| `mcpServers.developer.ingress.tls.enabled` | Enable Ingress TLS | `false` |
+| `mcpServers.developer.ingress.tls.secretName` | Ingress TLS secret name | `` |
+| `mcpServers.developer.ingress.annotations` | Ingress annotations | `{}` |
+| `mcpServers.developer.podDisruptionBudget.enabled` | Enable the developer MCP PDB | `false` |
+| `mcpServers.developer.podDisruptionBudget.minAvailable` | PDB minAvailable | `1` |
+| `mcpServers.developer.autoscaling.enabled` | Enable the developer MCP HPA | `false` |
+| `mcpServers.developer.autoscaling.minReplicas` | HPA minimum replicas | `1` |
+| `mcpServers.developer.autoscaling.maxReplicas` | HPA maximum replicas | `3` |
+| `mcpServers.developer.autoscaling.targetCPUUtilizationPercentage` | HPA CPU target | `80` |
+| `mcpServers.developer.resources` | Developer MCP resource requests and limits | `{}` |
+| `mcpServers.developer.podAnnotations` | Developer MCP pod annotations | `{}` |
+| `mcpServers.developer.nodeSelector` | Developer MCP node selector | `{}` |
+| `mcpServers.developer.tolerations` | Developer MCP tolerations | `[]` |
+| `mcpServers.developer.affinity` | Developer MCP affinity | `{}` |
+| `mcpServers.developer.networkPolicy.enabled` | Enable the dedicated developer NetworkPolicy | `true` |
+| `mcpServers.developer.serviceAccount.create` | Create the developer ServiceAccount | `true` |
+| `mcpServers.developer.serviceAccount.name` | Developer ServiceAccount name override | `` |
+| `mcpServers.developer.serviceAccount.annotations` | Developer ServiceAccount annotations | `{}` |

@@ -33,7 +33,7 @@ func run(ctx context.Context, args []string) error {
 		Usage: "Run a go-mcp-platform MCP server for one tool family",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "config", Usage: "YAML configuration file"},
-			&cli.StringFlag{Name: "server", Usage: "Tool family: kubernetes, argocd, prometheus or grafana"},
+			&cli.StringFlag{Name: "server", Usage: "Tool family: kubernetes, argocd, prometheus, grafana or developer"},
 			&cli.StringFlag{Name: "transport", Usage: "MCP transport: stdio or http"},
 			&cli.StringFlag{Name: "addr", Usage: "MCP HTTP listen address"},
 			&cli.StringFlag{Name: "ops-addr", Usage: "Operations listen address (/healthz, /readyz, /metrics)"},

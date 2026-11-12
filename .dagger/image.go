@@ -17,6 +17,11 @@ func (m *McpPlatform) ImageApproval() *dagger.Container {
 	return dag.Image().Build(m.Src, dagger.ImageBuildOpts{Dockerfile: "Dockerfile.approval"}).GetContainer()
 }
 
+// ImageDeveloper builds the developer MCP server image (includes the Dagger CLI).
+func (m *McpPlatform) ImageDeveloper() *dagger.Container {
+	return dag.Image().Build(m.Src, dagger.ImageBuildOpts{Dockerfile: "Dockerfile.developer"}).GetContainer()
+}
+
 // PublishImages builds and pushes both images, returning their pinned refs.
 func (m *McpPlatform) PublishImages(ctx context.Context, registry, repository, version string, username, password *dagger.Secret) ([]string, error) {
 	images := []struct {
@@ -25,6 +30,7 @@ func (m *McpPlatform) PublishImages(ctx context.Context, registry, repository, v
 	}{
 		{name: "mcp", dockerfile: "Dockerfile.mcp"},
 		{name: "approval", dockerfile: "Dockerfile.approval"},
+		{name: "developer", dockerfile: "Dockerfile.developer"},
 	}
 	refs := make([]string, 0, len(images))
 	for _, image := range images {

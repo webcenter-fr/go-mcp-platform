@@ -12,6 +12,7 @@ They are written in a technical style, in **English and French**, and use
 | MCP hard approval | [`01-mcp-hard-approval.en.md`](./01-mcp-hard-approval.en.md) | [`01-mcp-hard-approval.fr.md`](./01-mcp-hard-approval.fr.md) | The standalone out-of-band approval service: topology, approval flow, signed receipt verification, `argsHash` canonicalization, store backends, security controls, and the Nuxt UI build/embedding. |
 | Deployment and CI | [`02-deployment-and-ci.en.md`](./02-deployment-and-ci.en.md) | [`02-deployment-and-ci.fr.md`](./02-deployment-and-ci.fr.md) | The deployable MCP/approval binaries, YAML configuration and file/env secrets, container images, the Helm chart and its security guards, and the Dagger CI pipeline. |
 | Developer sandbox | [`03-developer-sandbox.en.md`](./03-developer-sandbox.en.md) | [`03-developer-sandbox.fr.md`](./03-developer-sandbox.fr.md) | The credential-free Dagger sandbox, the GitHub tool family, the scaffolding surface, per-identity workspaces, the egress reality, the three engine modes, the lifecycle/tier model and the deferred in-engine Dagger LLM. |
+| Memory | [`04-mcp-memory.en.md`](./04-mcp-memory.en.md) | [`04-mcp-memory.fr.md`](./04-mcp-memory.fr.md) | The typed long-term agent memory family: memory taxonomy, storage backends (memory, file, OpenSearch), tenant isolation, secret redaction, MCP tools/prompts/resources, and the lazy OpenSearch/embedding/LLM design. |
 
 ## Related projects
 

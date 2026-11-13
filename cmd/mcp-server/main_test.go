@@ -104,3 +104,14 @@ func TestRunDeveloperStdio(t *testing.T) {
 	})
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestRunMemoryStdio(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := run(ctx, []string{
+		"mcp-server", "--config", "testdata/memory.yaml", "--server", "memory",
+		"--transport", "stdio", "--ops-addr", "not-an-address",
+	})
+	require.ErrorIs(t, err, context.Canceled)
+}

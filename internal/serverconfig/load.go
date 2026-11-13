@@ -48,6 +48,10 @@ func Load(path string, overrides map[string]any) (*Config, error) {
 		"developer.engine.mode", "developer.engine.runnerHost",
 		"developer.engine.cloudURL", "developer.engine.engineVersion",
 		"developer.workspaceRoot",
+		"memory.backend", "memory.isolation", "memory.file.dir",
+		"memory.opensearch.indexName",
+		"memory.embedding.provider", "memory.embedding.model", "memory.embedding.baseURL",
+		"memory.llm.provider", "memory.llm.model", "memory.llm.baseURL",
 	} {
 		_ = v.BindEnv(key)
 	}
@@ -116,6 +120,33 @@ func validateFamily(cfg *Config) error {
 		if cfg.Developer.GitHub != nil && len(cfg.Developer.GitHub.Instances) == 0 {
 			return errors.New("serverconfig: developer github requires at least one instance")
 		}
+	case "memory":
+		if cfg.Memory == nil {
+			return errors.New("serverconfig: memory family is not configured")
+		}
+		switch cfg.Memory.Backend {
+		case "file":
+			if cfg.Memory.File == nil || cfg.Memory.File.Dir == "" {
+				return errors.New("serverconfig: memory backend 'file' requires file.dir")
+			}
+		case "opensearch":
+			if cfg.Memory.OpenSearch == nil || len(cfg.Memory.OpenSearch.URLs) == 0 {
+				return errors.New("serverconfig: memory backend 'opensearch' requires opensearch.urls")
+			}
+		}
+		if _, err := parseOptionalDuration(cfg.Memory.RequestTimeout); err != nil {
+			return errors.Wrap(err, "serverconfig: memory requestTimeout")
+		}
+		if cfg.Memory.Embedding != nil {
+			if _, err := parseOptionalDuration(cfg.Memory.Embedding.Timeout); err != nil {
+				return errors.Wrap(err, "serverconfig: memory embedding timeout")
+			}
+		}
+		if cfg.Memory.LLM != nil {
+			if _, err := parseOptionalDuration(cfg.Memory.LLM.Timeout); err != nil {
+				return errors.Wrap(err, "serverconfig: memory llm timeout")
+			}
+		}
 	}
 	return nil
 }
@@ -167,6 +198,71 @@ func applyDefaults(cfg *Config) {
 		}
 	}
 	applyDeveloperDefaults(cfg.Developer)
+	applyMemoryDefaults(cfg.Memory)
+}
+
+// applyMemoryDefaults mirrors the memory constructor defaults so the loaded
+// configuration is validated against the same effective values.
+func applyMemoryDefaults(cfg *MemoryFamily) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Backend == "" {
+		cfg.Backend = "memory"
+	}
+	if cfg.Isolation == "" {
+		cfg.Isolation = "per_identity"
+	}
+	if cfg.SharedNamespace == "" {
+		cfg.SharedNamespace = "shared"
+	}
+	if cfg.DefaultTopK == 0 {
+		cfg.DefaultTopK = 5
+	}
+	if cfg.MaxTopK == 0 {
+		cfg.MaxTopK = 50
+	}
+	if cfg.MaxContentChars == 0 {
+		cfg.MaxContentChars = 16384
+	}
+	if cfg.MaxQueryChars == 0 {
+		cfg.MaxQueryChars = 4096
+	}
+	if cfg.RequestTimeout == "" {
+		cfg.RequestTimeout = "30s"
+	}
+	if cfg.Prompts == nil {
+		enabled := true
+		cfg.Prompts = &enabled
+	}
+	if cfg.OpenSearch != nil {
+		if cfg.OpenSearch.IndexName == "" {
+			cfg.OpenSearch.IndexName = "eino_agent_memory"
+		}
+		if cfg.OpenSearch.VectorField == "" {
+			cfg.OpenSearch.VectorField = "vector"
+		}
+		if cfg.OpenSearch.ContentField == "" {
+			cfg.OpenSearch.ContentField = "content"
+		}
+		if cfg.OpenSearch.VectorDimension == 0 {
+			cfg.OpenSearch.VectorDimension = 1536
+		}
+		if cfg.OpenSearch.BatchSize == 0 {
+			cfg.OpenSearch.BatchSize = 100
+		}
+	}
+	if cfg.Embedding != nil && cfg.Embedding.Timeout == "" {
+		cfg.Embedding.Timeout = "30s"
+	}
+	if cfg.LLM != nil {
+		if cfg.LLM.MaxOutputTokens == 0 {
+			cfg.LLM.MaxOutputTokens = 4096
+		}
+		if cfg.LLM.Timeout == "" {
+			cfg.LLM.Timeout = "30s"
+		}
+	}
 }
 
 // applyDeveloperDefaults mirrors the developer constructor defaults so the
@@ -286,6 +382,30 @@ func resolveSecrets(cfg *Config) error {
 				instance.Token = token
 				cfg.Developer.GitHub.Instances[name] = instance
 			}
+		}
+	}
+
+	if cfg.Memory != nil {
+		if cfg.Memory.OpenSearch != nil {
+			password, err := secretref.Resolve(cfg.Memory.OpenSearch.PasswordFile, cfg.Memory.OpenSearch.PasswordEnv, "", "memory OpenSearch password")
+			if err != nil {
+				return err
+			}
+			cfg.Memory.OpenSearch.Password = password
+		}
+		if cfg.Memory.Embedding != nil {
+			apiKey, err := secretref.Resolve(cfg.Memory.Embedding.APIKeyFile, cfg.Memory.Embedding.APIKeyEnv, "", "memory embedding API key")
+			if err != nil {
+				return err
+			}
+			cfg.Memory.Embedding.APIKey = apiKey
+		}
+		if cfg.Memory.LLM != nil {
+			apiKey, err := secretref.Resolve(cfg.Memory.LLM.APIKeyFile, cfg.Memory.LLM.APIKeyEnv, "", "memory LLM API key")
+			if err != nil {
+				return err
+			}
+			cfg.Memory.LLM.APIKey = apiKey
 		}
 	}
 

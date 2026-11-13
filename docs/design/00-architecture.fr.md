@@ -76,6 +76,8 @@ La plateforme importe les paquets eino-ext suivants :
 | `components/tool/prometheus` | Famille d'outils Prometheus (`promtool.Configs`) |
 | `components/tool/grafana` | Famille d'outils Grafana (`grafanatool.Configs`) |
 | `components/tool/github` | Famille d'outils GitHub (`githubtool.Configs`, `NewAllTools`, `WriteToolNames`) |
+| `components/agent/memory` | Contrat de mémoire long terme (`MemoryStore`, `Entry`, `Extractor`) |
+| `components/model/chatmodel` | Fabriques génériques de modèle de chat et d'embedding |
 | `libs/toolkit/safety` | Primitives de porte, politique, audit et autorisation |
 | `libs/toolkit/validate` | Helper partagé `validate.Struct` |
 | `libs/toolkit/osclient` | Client OpenSearch utilisé par le store d'approbation |
@@ -273,6 +275,9 @@ func grafana.NewServer(ctx context.Context, configs grafanatool.Configs, cfg *mc
 func developer.NewServer(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, error)
 func developer.NewServerWithRunner(ctx context.Context, cfg *developer.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, io.Closer, error)
 func developer.WriteToolNames(cfg *developer.Config) []string
+func memory.NewServer(ctx context.Context, cfg *memory.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, error)
+func memory.NewServerWithCloser(ctx context.Context, cfg *memory.Config, mcpCfg *mcpserver.Config) (*mcpserver.Server, io.Closer, error)
+func memory.WriteToolNames(cfg *memory.Config) []string
 
 // internal/serverconfig — câblage des binaires
 func Load(path string, overrides map[string]any) (*Config, error)

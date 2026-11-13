@@ -10,7 +10,7 @@ import (
 // Config is the top-level MCP server configuration.
 type Config struct {
 	// Server selects the tool family to expose.
-	Server string `mapstructure:"server" validate:"required,oneof=kubernetes argocd prometheus grafana developer" jsonschema:"(required) Tool family: kubernetes, argocd, prometheus or grafana"`
+	Server string `mapstructure:"server" validate:"required,oneof=kubernetes argocd prometheus grafana developer memory" jsonschema:"(required) Tool family: kubernetes, argocd, prometheus, grafana, developer or memory"`
 	// Transport is the MCP transport: stdio or http.
 	Transport string `mapstructure:"transport" validate:"omitempty,oneof=stdio http" jsonschema:"description=MCP transport: 'stdio' or 'http' (default 'stdio')"`
 	// Addr is the HTTP listen address for the MCP transport.
@@ -30,6 +30,8 @@ type Config struct {
 	Grafana *InstanceFamily `mapstructure:"grafana" validate:"omitempty" jsonschema:"description=Grafana family configuration"`
 	// Developer configures the developer family.
 	Developer *DeveloperFamily `mapstructure:"developer" validate:"omitempty" jsonschema:"description=Developer family configuration"`
+	// Memory configures the memory family.
+	Memory *MemoryFamily `mapstructure:"memory" validate:"omitempty" jsonschema:"description=Memory family configuration"`
 	// Auth configures bearer-token authentication for the HTTP transport.
 	Auth *AuthConfig `mapstructure:"auth" validate:"omitempty" jsonschema:"description=Bearer-token authentication for the HTTP transport"`
 	// Authz configures RBAC.
@@ -300,4 +302,76 @@ type DeveloperGitHubInstance struct {
 	TLSSkipVerify bool `mapstructure:"tlsSkipVerify" validate:"omitempty" jsonschema:"description=Skip TLS certificate verification"`
 	// MaxCopyBytes caps directory copy/move size.
 	MaxCopyBytes int64 `mapstructure:"maxCopyBytes" validate:"omitempty,gte=1" jsonschema:"description=Maximum bytes for directory copy/move"`
+}
+
+// MemoryFamily configures the memory MCP family with file/env secret references.
+type MemoryFamily struct {
+	Backend               string                   `mapstructure:"backend" validate:"omitempty,oneof=memory file opensearch" jsonschema:"description=Storage backend: 'memory' (default), 'file', or 'opensearch'"`
+	Isolation             string                   `mapstructure:"isolation" validate:"omitempty,oneof=per_identity shared" jsonschema:"description=Tenant isolation: 'per_identity' (default) or 'shared'"`
+	SharedNamespace       string                   `mapstructure:"sharedNamespace" validate:"omitempty,max=128" jsonschema:"description=Shared namespace when isolation is 'shared'"`
+	File                  *MemoryFileBackend       `mapstructure:"file" validate:"omitempty" jsonschema:"description=JSONL file backend settings"`
+	OpenSearch            *MemoryOpenSearchBackend `mapstructure:"opensearch" validate:"omitempty" jsonschema:"description=OpenSearch backend settings"`
+	Embedding             *MemoryEmbeddingConfig   `mapstructure:"embedding" validate:"omitempty" jsonschema:"description=Embedding provider settings"`
+	LLM                   *MemoryLLMConfig         `mapstructure:"llm" validate:"omitempty" jsonschema:"description=Chat model settings for discussion capture"`
+	ReadOnly              bool                     `mapstructure:"readOnly" validate:"omitempty" jsonschema:"description=Expose only read-only memory tools"`
+	RequireDeleteApproval bool                     `mapstructure:"requireDeleteApproval" validate:"omitempty" jsonschema:"description=Gate memory_delete with human approval"`
+	Prompts               *bool                    `mapstructure:"prompts" validate:"omitempty" jsonschema:"description=Expose MCP prompts and resources (default true)"`
+	DefaultTopK           int                      `mapstructure:"defaultTopK" validate:"omitempty,gte=1,lte=50" jsonschema:"description=Default search topK (default 5)"`
+	MaxTopK               int                      `mapstructure:"maxTopK" validate:"omitempty,gte=1,lte=100" jsonschema:"description=Max search topK (default 50)"`
+	MaxContentChars       int                      `mapstructure:"maxContentChars" validate:"omitempty,gte=256,lte=32768" jsonschema:"description=Max characters per memory (default 16384)"`
+	MaxQueryChars         int                      `mapstructure:"maxQueryChars" validate:"omitempty,gte=64,lte=16384" jsonschema:"description=Max characters per search query (default 4096)"`
+	RequestTimeout        string                   `mapstructure:"requestTimeout" validate:"omitempty" jsonschema:"description=Per-operation timeout (default '30s')"`
+	MinScore              *float64                 `mapstructure:"minScore" validate:"omitempty,gte=0" jsonschema:"description=Optional minimum relevance score"`
+}
+
+// MemoryFileBackend configures the per-tenant JSONL file store.
+type MemoryFileBackend struct {
+	Dir string `mapstructure:"dir" validate:"required" jsonschema:"(required) Absolute host directory for JSONL memory files"`
+}
+
+// MemoryOpenSearchBackend configures the OpenSearch store.
+type MemoryOpenSearchBackend struct {
+	URLs               []string `mapstructure:"urls" validate:"required,min=1,dive,required,url" jsonschema:"(required) OpenSearch cluster URLs"`
+	Username           string   `mapstructure:"username" validate:"omitempty" jsonschema:"description=Basic auth username"`
+	PasswordFile       string   `mapstructure:"passwordFile" validate:"omitempty" jsonschema:"description=File containing the OpenSearch password"`
+	PasswordEnv        string   `mapstructure:"passwordEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the OpenSearch password"`
+	Password           string   `mapstructure:"-" validate:"-" jsonschema:"-"`
+	TLSSkipVerify      bool     `mapstructure:"tlsSkipVerify" validate:"omitempty" jsonschema:"description=Skip TLS certificate verification"`
+	IndexName          string   `mapstructure:"indexName" validate:"omitempty,max=255" jsonschema:"description=OpenSearch index name (default 'eino_agent_memory')"`
+	VectorField        string   `mapstructure:"vectorField" validate:"omitempty,max=128" jsonschema:"description=knn_vector field name (default 'vector')"`
+	ContentField       string   `mapstructure:"contentField" validate:"omitempty,max=128" jsonschema:"description=BM25 content field name (default 'content')"`
+	VectorDimension    int      `mapstructure:"vectorDimension" validate:"omitempty,gte=1,lte=8192" jsonschema:"description=knn_vector dimension (default 1536)"`
+	Hybrid             bool     `mapstructure:"hybrid" validate:"omitempty" jsonschema:"description=Combine kNN with BM25"`
+	K                  int      `mapstructure:"k" validate:"omitempty,gte=1,lte=500" jsonschema:"description=Nearest neighbors K"`
+	BatchSize          int      `mapstructure:"batchSize" validate:"omitempty,gte=1,lte=1000" jsonschema:"description=Bulk index batch size"`
+	SearchPipeline     string   `mapstructure:"searchPipeline" validate:"omitempty,max=128" jsonschema:"description=Optional search pipeline"`
+	Operator           string   `mapstructure:"operator" validate:"omitempty,oneof=or and" jsonschema:"description=BM25 operator ('or' or 'and')"`
+	MinimumShouldMatch string   `mapstructure:"minimumShouldMatch" validate:"omitempty,max=128" jsonschema:"description=Optional BM25 minimum_should_match"`
+}
+
+// MemoryEmbeddingConfig configures an embedding provider with secret references.
+type MemoryEmbeddingConfig struct {
+	Provider      string `mapstructure:"provider" validate:"required,oneof=openai github-copilot" jsonschema:"(required) Embedding provider: 'openai' or 'github-copilot'"`
+	Model         string `mapstructure:"model" validate:"required,max=256" jsonschema:"(required) Embedding model ID"`
+	BaseURL       string `mapstructure:"baseURL" validate:"omitempty,url" jsonschema:"description=Optional provider endpoint URL"`
+	APIKeyFile    string `mapstructure:"apiKeyFile" validate:"omitempty" jsonschema:"description=File containing the embedding API key"`
+	APIKeyEnv     string `mapstructure:"apiKeyEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the embedding API key"`
+	APIKey        string `mapstructure:"-" validate:"-" jsonschema:"-"`
+	Timeout       string `mapstructure:"timeout" validate:"omitempty" jsonschema:"description=Request timeout (default '30s')"`
+	TLSSkipVerify bool   `mapstructure:"tlsSkipVerify" validate:"omitempty" jsonschema:"description=Skip TLS certificate verification"`
+}
+
+// MemoryLLMConfig configures a chat model with secret references.
+type MemoryLLMConfig struct {
+	Provider        string  `mapstructure:"provider" validate:"required,oneof=ollama openai github-copilot" jsonschema:"(required) Chat model provider: 'ollama', 'openai', or 'github-copilot'"`
+	Model           string  `mapstructure:"model" validate:"required,max=256" jsonschema:"(required) Chat model ID"`
+	BaseURL         string  `mapstructure:"baseURL" validate:"omitempty,url" jsonschema:"description=Optional provider base URL"`
+	APIKeyFile      string  `mapstructure:"apiKeyFile" validate:"omitempty" jsonschema:"description=File containing the LLM API key"`
+	APIKeyEnv       string  `mapstructure:"apiKeyEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the LLM API key"`
+	APIKey          string  `mapstructure:"-" validate:"-" jsonschema:"-"`
+	Temperature     float32 `mapstructure:"temperature" validate:"gte=0,lte=2" jsonschema:"description=Sampling temperature"`
+	Thinking        string  `mapstructure:"thinking" validate:"omitempty,oneof=off low medium high" jsonschema:"description=Reasoning effort"`
+	MaxOutputTokens int     `mapstructure:"maxOutputTokens" validate:"gte=0,lte=32000" jsonschema:"description=Max output tokens"`
+	Timeout         string  `mapstructure:"timeout" validate:"omitempty" jsonschema:"description=LLM request timeout (default '30s')"`
+	TLSSkipVerify   bool    `mapstructure:"tlsSkipVerify" validate:"omitempty" jsonschema:"description=Skip TLS certificate verification"`
 }

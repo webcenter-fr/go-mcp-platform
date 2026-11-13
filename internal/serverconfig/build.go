@@ -18,6 +18,7 @@ import (
 	developermcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/developer"
 	grafanamcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/grafana"
 	kubernetesmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/kubernetes"
+	memorymcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/memory"
 	prometheusmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/prometheus"
 )
 
@@ -101,8 +102,18 @@ func Build(ctx context.Context, cfg *Config) (*mcpserver.Server, error) {
 		}
 		return developermcp.NewServer(ctx, devCfg, mcpCfg)
 
+	case "memory":
+		if cfg.Memory == nil {
+			return nil, errors.New("serverconfig: memory family is not configured")
+		}
+		memCfg, err := memoryConfigFromFamily(cfg.Memory)
+		if err != nil {
+			return nil, err
+		}
+		return memorymcp.NewServer(ctx, memCfg, mcpCfg)
+
 	default:
-		return nil, errors.Errorf("unknown MCP server family %q: must be one of kubernetes, argocd, prometheus, grafana, developer", cfg.Server)
+		return nil, errors.Errorf("unknown MCP server family %q: must be one of kubernetes, argocd, prometheus, grafana, developer, memory", cfg.Server)
 	}
 }
 
@@ -272,4 +283,79 @@ func buildMCPConfig(cfg *Config) *mcpserver.Config {
 		}
 	}
 	return mcpCfg
+}
+
+// memoryConfigFromFamily translates the secret-reference configuration into the
+// memory family's resolved configuration.
+func memoryConfigFromFamily(family *MemoryFamily) (*memorymcp.Config, error) {
+	cfg := &memorymcp.Config{
+		Backend:               memorymcp.BackendType(family.Backend),
+		Isolation:             memorymcp.IsolationMode(family.Isolation),
+		SharedNamespace:       family.SharedNamespace,
+		ReadOnly:              family.ReadOnly,
+		RequireDeleteApproval: family.RequireDeleteApproval,
+		Prompts:               family.Prompts,
+		DefaultTopK:           family.DefaultTopK,
+		MaxTopK:               family.MaxTopK,
+		MaxContentChars:       family.MaxContentChars,
+		MaxQueryChars:         family.MaxQueryChars,
+		MinScore:              family.MinScore,
+	}
+	var err error
+	if cfg.RequestTimeout, err = parseOptionalDuration(family.RequestTimeout); err != nil {
+		return nil, errors.Wrap(err, "memory requestTimeout")
+	}
+	if family.File != nil {
+		cfg.File = &memorymcp.FileBackendConfig{Dir: family.File.Dir}
+	}
+	if family.OpenSearch != nil {
+		cfg.OpenSearch = &memorymcp.OpenSearchBackendConfig{
+			URLs:               family.OpenSearch.URLs,
+			Username:           family.OpenSearch.Username,
+			Password:           family.OpenSearch.Password,
+			TLSSkipVerify:      family.OpenSearch.TLSSkipVerify,
+			IndexName:          family.OpenSearch.IndexName,
+			VectorField:        family.OpenSearch.VectorField,
+			ContentField:       family.OpenSearch.ContentField,
+			VectorDimension:    family.OpenSearch.VectorDimension,
+			Hybrid:             family.OpenSearch.Hybrid,
+			K:                  family.OpenSearch.K,
+			BatchSize:          family.OpenSearch.BatchSize,
+			SearchPipeline:     family.OpenSearch.SearchPipeline,
+			Operator:           family.OpenSearch.Operator,
+			MinimumShouldMatch: family.OpenSearch.MinimumShouldMatch,
+		}
+	}
+	if family.Embedding != nil {
+		timeout, err := parseOptionalDuration(family.Embedding.Timeout)
+		if err != nil {
+			return nil, errors.Wrap(err, "memory embedding timeout")
+		}
+		cfg.Embedding = &memorymcp.EmbeddingConfig{
+			Provider:      family.Embedding.Provider,
+			Model:         family.Embedding.Model,
+			BaseURL:       family.Embedding.BaseURL,
+			APIKey:        family.Embedding.APIKey,
+			Timeout:       timeout,
+			TLSSkipVerify: family.Embedding.TLSSkipVerify,
+		}
+	}
+	if family.LLM != nil {
+		timeout, err := parseOptionalDuration(family.LLM.Timeout)
+		if err != nil {
+			return nil, errors.Wrap(err, "memory llm timeout")
+		}
+		cfg.LLM = &memorymcp.LLMConfig{
+			Provider:        family.LLM.Provider,
+			Model:           family.LLM.Model,
+			BaseURL:         family.LLM.BaseURL,
+			APIKey:          family.LLM.APIKey,
+			Temperature:     family.LLM.Temperature,
+			Thinking:        family.LLM.Thinking,
+			MaxOutputTokens: family.LLM.MaxOutputTokens,
+			Timeout:         timeout,
+			TLSSkipVerify:   family.LLM.TLSSkipVerify,
+		}
+	}
+	return cfg, nil
 }

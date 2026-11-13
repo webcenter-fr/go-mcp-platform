@@ -14,6 +14,7 @@ RBAC, and elicitation-based human approval for write tools.
 | [`prometheus`](./prometheus) | [`components/tool/prometheus`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/prometheus) | `instance` | 0 (read-only) |
 | [`grafana`](./grafana) | [`components/tool/grafana`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/grafana) | `instance` | 1 (`grafana_dashboard_write`) |
 | [`developer`](./developer) | [`components/tool/github`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/github) + [`libs/toolkit/dagger`](https://github.com/webcenter-fr/eino-ext/tree/main/libs/toolkit/dagger) | `instance` | 12 (`github_*` write tools; skipped when `github.readOnly=true`) |
+| [`memory`](./memory) | [`components/agent/memory`](https://github.com/webcenter-fr/eino-ext/tree/main/components/agent/memory) + [`components/model/chatmodel`](https://github.com/webcenter-fr/eino-ext/tree/main/components/model/chatmodel) | `instance` | 1 (`memory_delete`; gated only when `memory.requireDeleteApproval=true`) |
 
 ## Deployable binary
 

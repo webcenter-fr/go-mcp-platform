@@ -8,7 +8,7 @@ references, and wires the selected tool family into a
 ## Configuration
 
 ```yaml
-server: kubernetes          # kubernetes | argocd | prometheus | grafana | developer
+server: kubernetes          # kubernetes | argocd | prometheus | grafana | developer | memory
 transport: http             # stdio | http (default stdio)
 addr: ":8080"               # MCP HTTP listen address
 opsAddr: ":9090"            # /healthz, /readyz, /metrics (never in a Service)
@@ -45,6 +45,35 @@ developer:
       corp:
         tokenFile: /etc/go-mcp-platform/secrets/github-token
         timeout: 30s
+
+# Memory family: typed long-term agent memory.
+memory:
+  backend: file              # memory | file | opensearch
+  isolation: per_identity    # per_identity | shared
+  file:
+    dir: /var/lib/go-mcp-platform/memory
+  # opensearch:
+  #   urls: [https://opensearch.example.com]
+  #   username: admin
+  #   passwordFile: /etc/go-mcp-platform/secrets/opensearch-password
+  #   indexName: eino_agent_memory
+  #   hybrid: true
+  # embedding:
+  #   provider: openai
+  #   model: text-embedding-3-small
+  #   apiKeyFile: /etc/go-mcp-platform/secrets/openai-key
+  # llm:
+  #   provider: openai
+  #   model: gpt-4o-mini
+  #   apiKeyFile: /etc/go-mcp-platform/secrets/openai-key
+  readOnly: false
+  requireDeleteApproval: true
+  prompts: true
+  defaultTopK: 5
+  maxTopK: 50
+  maxContentChars: 16384
+  maxQueryChars: 4096
+  requestTimeout: 30s
 
 # URL/token families (argocd, prometheus, grafana) share the same shape.
 argocd:
@@ -119,7 +148,9 @@ srv, err := serverconfig.Build(ctx, cfg)
 
 `Build` is lazy: it constructs the family tools and the MCP server without
 contacting any external service. The developer family's Dagger engine is
-connected on the first `developer_sandbox_exec`, not at build time.
+connected on the first `developer_sandbox_exec`, not at build time. The memory
+family's OpenSearch client, embedder and index are created on the first memory
+operation, not at build time.
 
 > **Registry auth keys:** viper treats `.` as a key delimiter, so a
 > `developer.engine.registryAuth` hostname containing dots is split into nested

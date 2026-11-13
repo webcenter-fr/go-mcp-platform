@@ -38,7 +38,7 @@ helm template t . > /out/default.yaml
 for f in tests/values-*.yaml; do
   name=$(basename "$f" .yaml)
   case "$name" in
-    values-memory-multi-replica|values-file-no-persistence|values-oidc-no-secret)
+    values-memory-multi-replica|values-file-no-persistence|values-oidc-no-secret|values-developer-local-network|values-developer-no-token)
       if helm template t . -f "$f" >/dev/null 2>&1; then
         echo "GUARD BROKEN: $f must fail" >&2
         exit 1

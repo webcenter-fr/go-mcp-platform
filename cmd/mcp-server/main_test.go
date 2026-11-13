@@ -84,6 +84,7 @@ func TestServeHTTPOpsAndShutdown(t *testing.T) {
 	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
+	http.DefaultClient.CloseIdleConnections()
 	cancel()
 	select {
 	case err := <-errCh:

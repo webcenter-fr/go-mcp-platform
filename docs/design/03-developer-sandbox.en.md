@@ -256,9 +256,13 @@ connection is retried on the next call, not cached forever.
 
 The runner never forwards the MCP process environment. It starts from the base
 image's own environment, removes credential-shaped names (`GITHUB_TOKEN`,
-`KUBECONFIG`, proxy variables, loader variables, Dagger tokens), then applies
-the validated per-call `Env`. `validateEnv` rejects reserved names, reserved
-prefixes, credential-shaped names, NUL bytes and values over 4096 bytes.
+`KUBECONFIG`, loader variables, Dagger tokens), then applies the validated
+per-call `Env`. The proxy variables (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`) are
+deliberately **not** scrubbed: `WithEgressPolicy` sets them to route traffic
+through the egress proxy, so scrubbing them would disable enforcement. The
+per-call `Env` still rejects them (`validateEnv`), so an LLM cannot override the
+proxy. `validateEnv` also rejects reserved names, reserved prefixes,
+credential-shaped names, NUL bytes and values over 4096 bytes.
 
 ### 11.3 Output handling
 

@@ -80,7 +80,7 @@ func NewServerWithRunner(ctx context.Context, cfg *Config, mcpCfg *mcpserver.Con
 	if !policy.DefaultDeny {
 		logrus.Warn("developer: egress.defaultDeny=false — sandboxed commands may reach any destination")
 	}
-	if _, ok := runner.(egressEnforcer); ok {
+	if _, ok := runner.(egressEnforcer); ok && policy.DefaultDeny {
 		logrus.Warn("developer: egress is enforced through an HTTP proxy (soft control): tools that ignore HTTP_PROXY/HTTPS_PROXY (raw TCP: psql, redis-cli, nc, kubectl, direct dialers) bypass it; operator-side NetworkPolicy/nftables is required for a hard guarantee")
 	}
 

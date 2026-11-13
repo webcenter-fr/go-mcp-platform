@@ -269,10 +269,15 @@ au prochain appel, pas mise en cache indéfiniment.
 
 Le runner ne transmet jamais l'environnement du processus MCP. Il part de
 l'environnement de l'image de base, retire les noms credentialisés
-(`GITHUB_TOKEN`, `KUBECONFIG`, variables proxy, variables de loader, tokens
-Dagger), puis applique l'`Env` validé par appel. `validateEnv` rejette les noms
-réservés, les préfixes réservés, les noms credentialisés, les octets NUL et les
-valeurs de plus de 4096 octets.
+(`GITHUB_TOKEN`, `KUBECONFIG`, variables de loader, tokens Dagger), puis
+applique l'`Env` validé par appel. Les variables proxy
+(`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`) ne sont **pas** nettoyées
+délibérément : `WithEgressPolicy` les définit pour router le trafic via le proxy
+egress, donc les nettoyer désactiverait l'application de la politique. L'`Env`
+par appel les rejette toujours (`validateEnv`), donc un LLM ne peut pas
+outrepasser le proxy. `validateEnv` rejette aussi les noms réservés, les
+préfixes réservés, les noms credentialisés, les octets NUL et les valeurs de
+plus de 4096 octets.
 
 ### 11.3 Traitement de la sortie
 

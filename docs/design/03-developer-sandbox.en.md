@@ -129,11 +129,12 @@ which rejects traversal **and** symlinks.
 
 ## 5. Egress reality
 
-The pinned eino-ext release stores `WithEgressPolicy` but does not apply it
-(`Container()` never reads the policy), and `EgressProxyService` is a
-placeholder. The developer family therefore reports `egressEnforced=false` from
-`developer_sandbox_info` and logs a prominent startup WARN. This is a **soft**
-control even once the upstream proxy is wired:
+The upstream `Container()` applies `WithEgressPolicy`: it starts an in-process
+`egress.Proxy` through `EgressProxyService`, binds it as `eino-egress:3128`, and
+sets `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` on the container. The developer
+family therefore reports `egressEnforced=true` from `developer_sandbox_info`
+when the policy is deny-by-default, and logs a prominent startup WARN. This
+remains a **soft** control:
 
 | Client | Honors `HTTP_PROXY`/`HTTPS_PROXY`? |
 |---|---|

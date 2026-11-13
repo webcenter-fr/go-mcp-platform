@@ -38,6 +38,10 @@ func NewDaggerRunner(ctx context.Context, cfg *Config) (Runner, error) {
 	}, nil
 }
 
+// EgressEnforced reports that this runner applies the egress policy through
+// the upstream proxy. It satisfies the unexported egressEnforcer interface.
+func (r *daggerRunner) EgressEnforced() bool { return true }
+
 // applyEngineEnv exports the Dagger CLI/engine environment once at
 // construction. The SDK's runner-host path execs the CLI binary, so these must
 // be in the process environment before the first connection.
@@ -190,11 +194,15 @@ func (r *daggerRunner) Close() error {
 
 // scrubEnvNames returns the environment variable names removed from every
 // container before the per-call Env is applied.
+//
+// The proxy variables are intentionally absent: daggerlib.WithEgressPolicy in
+// Container() sets them to route traffic through the in-process egress proxy,
+// so scrubbing them would disable enforcement. The container starts from the
+// base image environment, not the MCP process environment, so this scrub
+// remains defense-in-depth for the remaining names.
 func scrubEnvNames() []string {
 	return []string{
 		"GITHUB_TOKEN", "GH_TOKEN", "KUBECONFIG",
-		"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
-		"http_proxy", "https_proxy", "no_proxy",
 		"LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
 		"DAGGER_CLOUD_TOKEN", "DAGGER_CLOUD_URL", "DAGGER_SESSION_TOKEN",
 		"_EXPERIMENTAL_DAGGER_CLI_BIN", "_EXPERIMENTAL_DAGGER_RUNNER_HOST",

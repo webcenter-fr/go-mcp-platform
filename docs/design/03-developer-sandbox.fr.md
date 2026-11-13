@@ -136,11 +136,12 @@ qui rejette la traversée **et** les symlinks.
 
 ## 5. Réalité de l'egress
 
-La version épinglée d'eino-ext stocke `WithEgressPolicy` mais ne l'applique pas
-(`Container()` ne lit jamais la politique), et `EgressProxyService` est un
-placeholder. La famille developer rapporte donc `egressEnforced=false` via
-`developer_sandbox_info` et journalise un WARN visible au démarrage. C'est un
-contrôle **soft**, même une fois le proxy amont câblé :
+Le `Container()` amont applique `WithEgressPolicy` : il démarre un
+`egress.Proxy` in-process via `EgressProxyService`, le lie comme
+`eino-egress:3128` et définit `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` sur le
+conteneur. La famille developer rapporte donc `egressEnforced=true` via
+`developer_sandbox_info` lorsque la politique est en deny-by-default, et
+journalise un WARN visible au démarrage. Cela reste un contrôle **soft** :
 
 | Client | Respecte `HTTP_PROXY`/`HTTPS_PROXY` ? |
 |---|---|

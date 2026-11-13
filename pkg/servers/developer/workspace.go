@@ -136,29 +136,6 @@ func validateEnv(env map[string]string) error {
 	return nil
 }
 
-// cacheMountsForProfile returns the container paths backed by cache volumes for
-// a profile. It mirrors the Phase 0 upstream CacheMountsForProfile helper; the
-// pinned eino-ext release does not expose it yet, so the fallback lives here.
-func cacheMountsForProfile(profileName string) []string {
-	apt := []string{"/var/cache/apt", "/var/lib/apt"}
-	switch profileName {
-	case "golang":
-		return append(apt, "/go/pkg/mod", "/root/.cache/go-build")
-	case "node":
-		return append(apt, "/root/.npm")
-	case "python":
-		return append(apt, "/root/.cache/pip")
-	case "java":
-		return append(apt, "/root/.m2", "/root/.gradle/caches")
-	case "rust":
-		return append(apt, "/usr/local/cargo/registry", "/workspace/target")
-	case "php":
-		return append(apt, "/root/.composer/cache")
-	default:
-		return apt
-	}
-}
-
 // resolveImage detects the project profile under workdir and returns the
 // profile name and base image. The fallback profile uses cfg.BaseImage.
 func resolveImage(ctx context.Context, cfg *Config, resolver *profile.Resolver, workdir string) (string, string, error) {

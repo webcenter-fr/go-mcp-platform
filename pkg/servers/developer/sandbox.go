@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 
+	daggerlib "github.com/webcenter-fr/eino-ext/libs/toolkit/dagger"
 	"github.com/webcenter-fr/eino-ext/libs/toolkit/egress"
 	"github.com/webcenter-fr/eino-ext/libs/toolkit/profile"
 	"github.com/webcenter-fr/eino-ext/libs/toolkit/safety"
@@ -89,7 +90,7 @@ type SandboxInfoOutput struct {
 	DefaultBaseImage     string            `json:"defaultBaseImage"`
 	EgressDefaultDeny    bool              `json:"egressDefaultDeny"`
 	EgressAllowHosts     []string          `json:"egressAllowHosts"`
-	EgressEnforced       bool              `json:"egressEnforced"` // false until Phase 0 lands
+	EgressEnforced       bool              `json:"egressEnforced"` // true when the runner applies a deny-by-default policy
 	AllowLocalNetwork    bool              `json:"allowLocalNetwork"`
 	CredentialsInSandbox bool              `json:"credentialsInSandbox"` // always false
 	DefaultTimeout       string            `json:"defaultTimeout"`
@@ -99,6 +100,12 @@ type SandboxInfoOutput struct {
 	WorkspaceRoot        string            `json:"workspaceRoot"` // the identity's own root
 	EngineMode           string            `json:"engineMode"`
 }
+
+// egressEnforcer is implemented by runners that apply the egress policy. It is
+// deliberately unexported and not part of Runner, so external Runner
+// implementations keep compiling; a runner that does not implement it is
+// reported as not enforcing egress.
+type egressEnforcer interface{ EgressEnforced() bool }
 
 // sandboxService holds the per-identity sandbox tool state.
 type sandboxService struct {
@@ -215,7 +222,7 @@ func (s *sandboxService) exec(ctx context.Context, params *SandboxExecParams) (s
 		Stdin:          params.Stdin,
 		Env:            params.Env,
 		User:           s.cfg.ContainerUser,
-		CacheMounts:    cacheMountsForProfile(profileName),
+		CacheMounts:    daggerlib.CacheMountsForProfile(profileName),
 		CacheKeyPrefix: image + "\x00" + profileName,
 		Egress:         s.policy,
 		Timeout:        timeout,
@@ -252,12 +259,14 @@ func (s *sandboxService) info(_ context.Context, _ *SandboxInfoParams) (string, 
 	for name, image := range s.resolver.ImageMap {
 		profiles[name] = image
 	}
+	e, ok := s.runner.(egressEnforcer)
+	enforced := ok && e.EgressEnforced() && s.policy != nil && s.policy.DefaultDeny
 	return marshalJSON(SandboxInfoOutput{
 		Profiles:             profiles,
 		DefaultBaseImage:     s.cfg.BaseImage,
 		EgressDefaultDeny:    s.cfg.Egress.DefaultDeny != nil && *s.cfg.Egress.DefaultDeny,
 		EgressAllowHosts:     append([]string(nil), s.cfg.Egress.AllowHosts...),
-		EgressEnforced:       false,
+		EgressEnforced:       enforced,
 		AllowLocalNetwork:    s.cfg.Egress.AllowLocalNetwork,
 		CredentialsInSandbox: false,
 		DefaultTimeout:       s.cfg.DefaultTimeout.String(),

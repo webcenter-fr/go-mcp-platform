@@ -274,6 +274,32 @@ func TestSandboxInfo(t *testing.T) {
 	assert.Contains(t, result.Profiles, "golang")
 }
 
+func TestSandboxInfoEgressEnforced(t *testing.T) {
+	tests := []struct {
+		name        string
+		runner      Runner
+		defaultDeny bool
+		want        bool
+	}{
+		{name: "fake runner never enforces", runner: &FakeRunner{}, defaultDeny: true, want: false},
+		{name: "dagger runner with default deny", runner: &daggerRunner{}, defaultDeny: true, want: true},
+		{name: "dagger runner without default deny", runner: &daggerRunner{}, defaultDeny: false, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testConfig(t, tt.runner)
+			deny := tt.defaultDeny
+			cfg.Egress = &EgressConfig{DefaultDeny: &deny}
+			svc, _ := newTestSandbox(t, cfg, tt.runner)
+			out, err := svc.info(context.Background(), &SandboxInfoParams{})
+			require.NoError(t, err)
+			var result SandboxInfoOutput
+			require.NoError(t, json.Unmarshal([]byte(out), &result))
+			assert.Equal(t, tt.want, result.EgressEnforced)
+		})
+	}
+}
+
 func TestResolveImageAllowedImages(t *testing.T) {
 	cfg := testConfig(t, &FakeRunner{})
 	applyDefaults(cfg)

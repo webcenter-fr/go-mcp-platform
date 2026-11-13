@@ -130,16 +130,6 @@ func TestResolveWorkdirRejectsTraversalAbsoluteAndSymlink(t *testing.T) {
 	}
 }
 
-func TestCacheMountsForProfile(t *testing.T) {
-	assert.Contains(t, cacheMountsForProfile("golang"), "/go/pkg/mod")
-	assert.Contains(t, cacheMountsForProfile("node"), "/root/.npm")
-	assert.Contains(t, cacheMountsForProfile("python"), "/root/.cache/pip")
-	assert.Contains(t, cacheMountsForProfile("java"), "/root/.m2")
-	assert.Contains(t, cacheMountsForProfile("rust"), "/usr/local/cargo/registry")
-	assert.Contains(t, cacheMountsForProfile("php"), "/root/.composer/cache")
-	assert.Equal(t, []string{"/var/cache/apt", "/var/lib/apt"}, cacheMountsForProfile("default"))
-}
-
 func TestTruncateOutput(t *testing.T) {
 	stdout := "0123456789"
 	stderr := "abcdefghij"

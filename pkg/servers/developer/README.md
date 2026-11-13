@@ -27,13 +27,16 @@ The subject comes from the verified bearer token, so the model cannot forge it.
 `ToolsFor` forces identity-keyed server caching even without RBAC, so two
 identities never share a tool set or a workspace.
 
-> **Egress is a soft control.** The pinned eino-ext release does not yet apply
-> `WithEgressPolicy` (it is a verified no-op), so `developer_sandbox_info`
-> reports `egressEnforced=false` and the server logs a startup WARN. Even once
-> the upstream proxy is wired, it only covers tools that honor
-> `HTTP_PROXY`/`HTTPS_PROXY`; raw TCP (`psql`, `redis-cli`, `nc`, `kubectl`,
-> direct dialers) bypasses it. A hard guarantee requires operator-side
-> NetworkPolicy/nftables and a dedicated engine.
+> **Egress is enforced through an HTTP proxy (soft control).** The upstream
+> `Container()` applies `WithEgressPolicy`: it starts an in-process
+> `egress.Proxy`, binds it as `eino-egress:3128`, and sets
+> `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` on the container.
+> `developer_sandbox_info` reports `egressEnforced=true` when the policy is
+> deny-by-default (`egress.defaultDeny=true`, the default). The proxy only
+> covers tools that honor `HTTP_PROXY`/`HTTPS_PROXY`; raw TCP (`psql`,
+> `redis-cli`, `nc`, `kubectl`, direct dialers) bypasses it. A hard guarantee
+> requires operator-side NetworkPolicy/nftables and a dedicated engine (see the
+> operator runbook in `docs/design/03-developer-sandbox.en.md`).
 
 ## Quick start
 

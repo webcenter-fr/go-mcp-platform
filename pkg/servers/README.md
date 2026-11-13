@@ -13,6 +13,7 @@ RBAC, and elicitation-based human approval for write tools.
 | [`argocd`](./argocd) | [`components/tool/argocd`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/argocd) | `instance` | 3 (`argocd_application_create`, `argocd_application_delete`, `argocd_application_sync`) |
 | [`prometheus`](./prometheus) | [`components/tool/prometheus`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/prometheus) | `instance` | 0 (read-only) |
 | [`grafana`](./grafana) | [`components/tool/grafana`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/grafana) | `instance` | 1 (`grafana_dashboard_write`) |
+| [`developer`](./developer) | [`components/tool/github`](https://github.com/webcenter-fr/eino-ext/tree/main/components/tool/github) + [`libs/toolkit/dagger`](https://github.com/webcenter-fr/eino-ext/tree/main/libs/toolkit/dagger) | `instance` | 12 (`github_*` write tools; skipped when `github.readOnly=true`) |
 
 ## Deployable binary
 

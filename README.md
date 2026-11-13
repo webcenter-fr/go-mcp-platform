@@ -1,8 +1,8 @@
 # go-mcp-platform
 
 A deployable MCP platform: one MCP server per eino tool family (Kubernetes,
-ArgoCD, Prometheus, Grafana) plus a standalone out-of-band human-approval
-service with an embedded Nuxt UI. It provides provider-based authentication
+ArgoCD, Prometheus, Grafana, Developer) plus a standalone out-of-band
+human-approval service with an embedded Nuxt UI. It provides provider-based authentication
 (local static tokens + OIDC), granular RBAC, and signed-receipt approval for
 write tools.
 
@@ -18,7 +18,7 @@ Dependencies point inward and never reverse:
 cmd/  ->  internal/  ->  pkg/  ->  github.com/webcenter-fr/eino-ext
 ```
 
-- `cmd/mcp-server/` — deployable MCP server binary (one binary, four families).
+- `cmd/mcp-server/` — deployable MCP server binary (one binary, five families).
 - `cmd/approval-server/` — standalone approval-service binary.
 - `internal/serverconfig/` — YAML configuration and binary wiring.
 - `internal/approval/` — approval service, store backends and the embedded Nuxt
@@ -26,7 +26,8 @@ cmd/  ->  internal/  ->  pkg/  ->  github.com/webcenter-fr/eino-ext
 - `internal/logging/`, `internal/secretref/` — private helpers.
 - `pkg/mcp/` — public generic MCP toolkit (auth, RBAC, approval, transports).
 - `pkg/mcp/approval/` — public approval-service client.
-- `pkg/servers/` — public embeddable per-family servers.
+- `pkg/servers/` — public embeddable per-family servers, including the
+  credential-free developer sandbox (`pkg/servers/developer`).
 - `helm/go-mcp-platform/` — Helm chart.
 - `.dagger/` — Dagger CI module (Go gates, UI, images, Helm, publish).
 - `docs/design/` — bilingual technical design documents.
@@ -38,6 +39,7 @@ MCP server:
 ```bash
 go run ./cmd/mcp-server --server kubernetes --config config.yaml
 go run ./cmd/mcp-server --server grafana --config config.yaml --transport http
+go run ./cmd/mcp-server --server developer --config config.yaml --transport http
 ```
 
 Approval service:
@@ -58,12 +60,14 @@ Images publish to:
 
 - `ghcr.io/webcenter-fr/go-mcp-platform/mcp`
 - `ghcr.io/webcenter-fr/go-mcp-platform/approval`
+- `ghcr.io/webcenter-fr/go-mcp-platform/developer` (adds the pinned Dagger CLI)
 
 Build them locally with:
 
 ```bash
 make docker-build-mcp
 make docker-build-approval
+make docker-build-developer
 ```
 
 ## Helm chart
@@ -76,6 +80,9 @@ helm install go-mcp-platform helm/go-mcp-platform
 
 The chart defaults to read-only Kubernetes RBAC, authenticated MCP, and the
 file-backed approval store. `allowWrite` and `allowExec` are dangerous opt-ins.
+The developer family is disabled by default (`mcpServers.developer.enabled=false`)
+because it needs a Dagger engine; in `sidecar` mode that engine is a privileged
+container in the same pod.
 
 ## Development
 
@@ -110,5 +117,6 @@ Never commit a `replace github.com/webcenter-fr/eino-ext => ../eino-ext`
 directive: CI runners have no sibling checkout, and a committed `replace` makes
 the published module unusable for downstream consumers.
 
-See the [architecture design doc](./docs/design/00-architecture.en.md) and
+See the [architecture design doc](./docs/design/00-architecture.en.md), the
+[developer sandbox design doc](./docs/design/03-developer-sandbox.en.md) and
 [`CONTRIBUTING.md`](./CONTRIBUTING.md).

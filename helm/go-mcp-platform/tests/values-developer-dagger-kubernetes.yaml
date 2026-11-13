@@ -1,0 +1,13 @@
+mcpServers:
+  developer:
+    enabled: true
+    engine:
+      mode: dagger-kubernetes
+      cloudURL: https://dagger.example.com
+      cloudTokenExistingSecret: developer-cloud
+      cloudTokenSecretKey: token
+    github:
+      existingSecret: developer-creds
+      approvalTokenHash: "0000000000000000000000000000000000000000000000000000000000000000"
+      instances:
+        corp: {}

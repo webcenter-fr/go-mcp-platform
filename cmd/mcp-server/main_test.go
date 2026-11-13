@@ -84,6 +84,7 @@ func TestServeHTTPOpsAndShutdown(t *testing.T) {
 	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
+	http.DefaultClient.CloseIdleConnections()
 	cancel()
 	select {
 	case err := <-errCh:
@@ -91,4 +92,15 @@ func TestServeHTTPOpsAndShutdown(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("serveHTTP did not shut down")
 	}
+}
+
+func TestRunDeveloperStdio(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := run(ctx, []string{
+		"mcp-server", "--config", "testdata/developer.yaml", "--server", "developer",
+		"--transport", "stdio", "--ops-addr", "not-an-address",
+	})
+	require.ErrorIs(t, err, context.Canceled)
 }

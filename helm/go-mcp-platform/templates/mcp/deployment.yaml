@@ -1,6 +1,6 @@
 {{- $root := . -}}
 {{- range $name, $cfg := .Values.mcpServers }}
-{{- if $cfg.enabled }}
+{{- if and $cfg.enabled (ne $name "developer") }}
 {{- $sa := include "go-mcp-platform.serviceAccountName" (dict "root" $root "component" $name "serviceAccount" $root.Values.mcp.serviceAccount) }}
 {{- $familySecret := include "go-mcp-platform.familySecretName" (dict "root" $root "name" $name) }}
 {{- if $cfg.existingSecret }}{{ $familySecret = $cfg.existingSecret }}{{ end }}

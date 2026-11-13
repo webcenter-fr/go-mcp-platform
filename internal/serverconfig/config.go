@@ -10,7 +10,7 @@ import (
 // Config is the top-level MCP server configuration.
 type Config struct {
 	// Server selects the tool family to expose.
-	Server string `mapstructure:"server" validate:"required,oneof=kubernetes argocd prometheus grafana" jsonschema:"(required) Tool family: kubernetes, argocd, prometheus or grafana"`
+	Server string `mapstructure:"server" validate:"required,oneof=kubernetes argocd prometheus grafana developer" jsonschema:"(required) Tool family: kubernetes, argocd, prometheus or grafana"`
 	// Transport is the MCP transport: stdio or http.
 	Transport string `mapstructure:"transport" validate:"omitempty,oneof=stdio http" jsonschema:"description=MCP transport: 'stdio' or 'http' (default 'stdio')"`
 	// Addr is the HTTP listen address for the MCP transport.
@@ -28,6 +28,8 @@ type Config struct {
 	Prometheus *InstanceFamily `mapstructure:"prometheus" validate:"omitempty" jsonschema:"description=Prometheus family configuration"`
 	// Grafana configures the Grafana family.
 	Grafana *InstanceFamily `mapstructure:"grafana" validate:"omitempty" jsonschema:"description=Grafana family configuration"`
+	// Developer configures the developer family.
+	Developer *DeveloperFamily `mapstructure:"developer" validate:"omitempty" jsonschema:"description=Developer family configuration"`
 	// Auth configures bearer-token authentication for the HTTP transport.
 	Auth *AuthConfig `mapstructure:"auth" validate:"omitempty" jsonschema:"description=Bearer-token authentication for the HTTP transport"`
 	// Authz configures RBAC.
@@ -187,4 +189,115 @@ type ApprovalServiceConfig struct {
 	RequestTimeout string `mapstructure:"requestTimeout" validate:"omitempty" jsonschema:"description=Per-request HTTP timeout (default '35s')"`
 	// TTL is the approval record TTL requested from the service.
 	TTL string `mapstructure:"ttl" validate:"omitempty" jsonschema:"description=Approval record TTL (default '15m')"`
+}
+
+// DeveloperFamily configures the developer tool family. It mirrors
+// developer.Config but carries secret references instead of resolved values.
+type DeveloperFamily struct {
+	// WorkspaceRoot is the absolute host root for per-identity workspaces.
+	WorkspaceRoot string `mapstructure:"workspaceRoot" validate:"required" jsonschema:"(required) Absolute host root for per-identity workspaces"`
+	// BaseImage is the fallback OCI base image.
+	BaseImage string `mapstructure:"baseImage" validate:"omitempty" jsonschema:"description=Fallback OCI base image (default 'alpine:3.20')"`
+	// ImageOverrides maps a profile name to an OCI base image.
+	ImageOverrides map[string]string `mapstructure:"imageOverrides" validate:"omitempty" jsonschema:"description=Per-profile base image overrides"`
+	// AllowedImages restricts the base images that may be used.
+	AllowedImages []string `mapstructure:"allowedImages" validate:"omitempty,dive,required" jsonschema:"description=Allowlist of permitted base images"`
+	// Egress configures sandbox egress.
+	Egress *DeveloperEgress `mapstructure:"egress" validate:"omitempty" jsonschema:"description=Sandbox egress policy"`
+	// Engine configures the Dagger engine connection.
+	Engine DeveloperEngine `mapstructure:"engine" validate:"required" jsonschema:"(required) Dagger engine connection"`
+	// DefaultTimeout is the default per-command timeout.
+	DefaultTimeout string `mapstructure:"defaultTimeout" validate:"omitempty" jsonschema:"description=Default command timeout (default '5m')"`
+	// MaxTimeout caps the per-call timeout.
+	MaxTimeout string `mapstructure:"maxTimeout" validate:"omitempty" jsonschema:"description=Maximum command timeout (default '15m')"`
+	// MaxOutputBytes caps captured output.
+	MaxOutputBytes int `mapstructure:"maxOutputBytes" validate:"omitempty,gte=1024" jsonschema:"description=Maximum captured output bytes (default 256000)"`
+	// MaxConcurrentExecs caps simultaneous executions.
+	MaxConcurrentExecs int `mapstructure:"maxConcurrentExecs" validate:"omitempty,gte=1" jsonschema:"description=Maximum simultaneous executions (default 4)"`
+	// ContainerUser is the UID[:GID] inside the container.
+	ContainerUser string `mapstructure:"containerUser" validate:"omitempty" jsonschema:"description=Container user (default '1000:1000')"`
+	// ExtraBlocklist extends the default command blocklist.
+	ExtraBlocklist []string `mapstructure:"extraBlocklist" validate:"omitempty,dive,required" jsonschema:"description=Additional command blocklist patterns"`
+	// WorkspaceTTL is the idle workspace TTL.
+	WorkspaceTTL string `mapstructure:"workspaceTTL" validate:"omitempty" jsonschema:"description=Idle workspace TTL (default '24h')"`
+	// WorkspaceGCInterval is the GC sweep interval.
+	WorkspaceGCInterval string `mapstructure:"workspaceGCInterval" validate:"omitempty" jsonschema:"description=Workspace GC interval (default '1h')"`
+	// GitHub configures the GitHub tool family.
+	GitHub *DeveloperGitHub `mapstructure:"github" validate:"omitempty" jsonschema:"description=GitHub tool family settings"`
+	// Scaffolding enables the scaffolding surface.
+	Scaffolding *bool `mapstructure:"scaffolding" validate:"omitempty" jsonschema:"description=Expose scaffolding tools, prompts and resources (default true)"`
+}
+
+// DeveloperEgress is the sandbox egress policy.
+type DeveloperEgress struct {
+	// DefaultDeny denies everything not explicitly allowed.
+	DefaultDeny *bool `mapstructure:"defaultDeny" validate:"omitempty" jsonschema:"description=Deny all egress except the allowlist (default true)"`
+	// AllowHosts are the permitted destination hostnames.
+	AllowHosts []string `mapstructure:"allowHosts" validate:"omitempty,dive,required,hostname_rfc1123" jsonschema:"description=Allowed egress hostnames"`
+	// AllowCIDRs are the permitted destination CIDRs.
+	AllowCIDRs []string `mapstructure:"allowCIDRs" validate:"omitempty,dive,cidr" jsonschema:"description=Allowed egress CIDRs"`
+	// AllowLocalNetwork permits private-network egress. DANGEROUS.
+	AllowLocalNetwork bool `mapstructure:"allowLocalNetwork" validate:"omitempty" jsonschema:"description=DANGEROUS - allow local/private network egress"`
+}
+
+// DeveloperEngine configures the Dagger engine connection.
+type DeveloperEngine struct {
+	// Mode is sidecar, cloud or dagger-kubernetes.
+	Mode string `mapstructure:"mode" validate:"required,oneof=sidecar cloud dagger-kubernetes" jsonschema:"(required) Engine mode: 'sidecar', 'cloud' or 'dagger-kubernetes'"`
+	// RunnerHost is the Dagger runner host.
+	RunnerHost string `mapstructure:"runnerHost" validate:"omitempty" jsonschema:"description=Dagger runner host"`
+	// CloudURL is the Dagger Cloud / supervisor base URL.
+	CloudURL string `mapstructure:"cloudURL" validate:"required_if=Mode dagger-kubernetes,omitempty,url" jsonschema:"description=Dagger Cloud / supervisor base URL"`
+	// CloudTokenFile is a file containing the Dagger Cloud token.
+	CloudTokenFile string `mapstructure:"cloudTokenFile" validate:"omitempty" jsonschema:"description=File containing the Dagger Cloud token"`
+	// CloudTokenEnv is the environment variable containing the Dagger Cloud token.
+	CloudTokenEnv string `mapstructure:"cloudTokenEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the Dagger Cloud token"`
+	// CloudToken is the resolved token. Never set from YAML.
+	CloudToken string `mapstructure:"-" validate:"-" jsonschema:"-"`
+	// EngineVersion pins the Dagger engine version.
+	EngineVersion string `mapstructure:"engineVersion" validate:"omitempty" jsonschema:"description=Pinned Dagger engine version"`
+	// CLIPath is the Dagger CLI binary path.
+	CLIPath string `mapstructure:"cliPath" validate:"omitempty" jsonschema:"description=Dagger CLI binary path"`
+	// RegistryAuth holds registry pull credentials keyed by hostname.
+	RegistryAuth map[string]DeveloperRegistryAuth `mapstructure:"registryAuth" validate:"omitempty,dive" jsonschema:"description=Registry pull credentials keyed by hostname"`
+}
+
+// DeveloperRegistryAuth is a registry credential with secret references.
+type DeveloperRegistryAuth struct {
+	// Username is the registry username.
+	Username string `mapstructure:"username" validate:"required" jsonschema:"(required) Registry username"`
+	// PasswordFile is a file containing the registry password.
+	PasswordFile string `mapstructure:"passwordFile" validate:"required_without_all=PasswordEnv Password" jsonschema:"description=File containing the registry password"`
+	// PasswordEnv is the environment variable containing the registry password.
+	PasswordEnv string `mapstructure:"passwordEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the registry password"`
+	// Password is the resolved password. Never set from YAML.
+	Password string `mapstructure:"-" validate:"required" jsonschema:"-"`
+}
+
+// DeveloperGitHub configures the GitHub tool family.
+type DeveloperGitHub struct {
+	// Instances maps a GitHub instance name to its settings.
+	Instances map[string]DeveloperGitHubInstance `mapstructure:"instances" validate:"required,min=1,dive" jsonschema:"(required) GitHub instances keyed by name"`
+	// ReadOnly exposes only the non-gated GitHub tools.
+	ReadOnly bool `mapstructure:"readOnly" validate:"omitempty" jsonschema:"description=Expose only read-only GitHub tools"`
+}
+
+// DeveloperGitHubInstance configures one GitHub instance.
+type DeveloperGitHubInstance struct {
+	// TokenFile is a file containing the GitHub token.
+	TokenFile string `mapstructure:"tokenFile" validate:"required_without_all=TokenEnv Token" jsonschema:"description=File containing the GitHub token"`
+	// TokenEnv is the environment variable containing the GitHub token.
+	TokenEnv string `mapstructure:"tokenEnv" validate:"omitempty" jsonschema:"description=Environment variable containing the GitHub token"`
+	// Token is the resolved token. Never set from YAML.
+	Token string `mapstructure:"-" validate:"required" jsonschema:"-"`
+	// BaseURL is the GitHub Enterprise base URL.
+	BaseURL string `mapstructure:"baseURL" validate:"omitempty,url" jsonschema:"description=GitHub Enterprise base URL"`
+	// UploadURL is the GHES upload URL.
+	UploadURL string `mapstructure:"uploadURL" validate:"omitempty,url" jsonschema:"description=GHES upload URL"`
+	// Timeout is the per-request timeout.
+	Timeout string `mapstructure:"timeout" validate:"omitempty" jsonschema:"description=Per-request timeout (default '30s')"`
+	// TLSSkipVerify disables TLS certificate verification.
+	TLSSkipVerify bool `mapstructure:"tlsSkipVerify" validate:"omitempty" jsonschema:"description=Skip TLS certificate verification"`
+	// MaxCopyBytes caps directory copy/move size.
+	MaxCopyBytes int64 `mapstructure:"maxCopyBytes" validate:"omitempty,gte=1" jsonschema:"description=Maximum bytes for directory copy/move"`
 }

@@ -1,0 +1,22 @@
+server: developer
+transport: http
+addr: ":8080"
+opsAddr: ":9090"
+log:
+  level: info
+  format: text
+developer:
+  workspaceRoot: /var/lib/go-mcp-platform/workspaces
+  baseImage: alpine:3.20
+  engine:
+    mode: sidecar
+    runnerHost: tcp://127.0.0.1:8081
+  egress:
+    defaultDeny: true
+    allowLocalNetwork: false
+  github:
+    readOnly: true
+    instances:
+      corp:
+        tokenFile: testdata/github-token
+        timeout: 30s

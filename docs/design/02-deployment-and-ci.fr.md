@@ -5,16 +5,18 @@ d'approbation autonome sont empaquetés, configurés, déployés et validés.
 
 ## Vue d'ensemble
 
-Deux images de conteneur sont produites à partir d'un seul module Go :
+Trois images de conteneur sont produites à partir d'un seul module Go :
 
 | Image | Point d'entrée | Rôle |
 |---|---|---|
-| `go-mcp-platform/mcp` | `cmd/mcp-server` | Un serveur MCP par famille d'outils (`kubernetes`, `argocd`, `prometheus`, `grafana`) |
+| `go-mcp-platform/mcp` | `cmd/mcp-server` | Un serveur MCP par famille d'outils (`kubernetes`, `argocd`, `prometheus`, `grafana`, `developer`) |
 | `go-mcp-platform/approval` | `cmd/approval-server` | Service d'approbation humaine hors bande avec l'UI Nuxt embarquée |
+| `go-mcp-platform/developer` | `cmd/mcp-server` | Image de la famille developer ; ajoute le CLI Dagger épinglé requis par le chemin runner-host du SDK |
 
-Les deux images sont basées sur `distroless/static-debian12:nonroot`,
+Les trois images sont basées sur `distroless/static-debian12:nonroot`,
 s'exécutent avec l'UID 65532 et n'exposent aucun shell. Les sondes sont donc des
-sondes HTTP `httpGet`.
+sondes HTTP `httpGet`. L'image developer embarque aussi un CLI Dagger lié
+statiquement et un `XDG_CACHE_HOME` inscriptible (`/tmp/cache`).
 
 ## Topologie de déploiement
 
@@ -24,10 +26,12 @@ graph LR
   client --> mcpArgo[MCP argocd]
   client --> mcpProm[MCP prometheus]
   client --> mcpGraf[MCP grafana]
+  client --> mcpDev[StatefulSet MCP developer]
 
   mcpK8s -->|approbation des écritures| approval[service d'approbation]
   mcpArgo -->|approbation des écritures| approval
   mcpGraf -->|approbation des écritures| approval
+  mcpDev -->|approbation des écritures| approval
 
   approval -->|file / redis / postgresql / opensearch| store[(store d'approbation)]
   human[Navigateur humain] -->|OIDC + cookie| approval
@@ -36,6 +40,8 @@ graph LR
   mcpArgo -->|HTTPS| argo[(ArgoCD)]
   mcpProm -->|HTTPS| prom[(Prometheus)]
   mcpGraf -->|HTTPS| graf[(Grafana)]
+  mcpDev -->|sidecar privilégié| engine[(Moteur Dagger)]
+  mcpDev -->|HTTPS| gh[(GitHub)]
 ```
 
 Les Services MCP sont uniquement de type `ClusterIP`. Le port d'opérations
@@ -68,7 +74,10 @@ Kubernetes.
 
 `helm/go-mcp-platform` déploie le service d'approbation et, pour chaque famille MCP
 activée, un Deployment, un Service, une ConfigMap, un Secret et un
-ServiceAccount.
+ServiceAccount. La famille developer est un **StatefulSet** et non un
+Deployment : le workspace et le cache du moteur ont besoin de PVC stables par
+réplique via `volumeClaimTemplates`. En mode `sidecar`, elle exécute un
+conteneur `dagger-engine` privilégié dans le même pod.
 
 Valeurs par défaut de sécurité :
 
@@ -97,6 +106,17 @@ Le chart échoue au rendu lorsque :
   chemin du store).
 - Une clé obligatoire manque dans un `existingSecret` (vérifié via `lookup`
   quand un cluster est disponible).
+- `developer.engine.mode=cloud` ou `dagger-kubernetes` n'a pas de token Dagger
+  Cloud.
+- `developer.engine.mode=dagger-kubernetes` n'a pas de `cloudURL`.
+- `developer.engine.mode=sidecar` désactive la persistance du moteur sans
+  acquittement explicite du cache froid.
+- `developer.egress.allowLocalNetwork=true` sans
+  `egress.acknowledgeLocalNetworkRisk=true`.
+- `developer.replicaCount > 1` ou l'HPA est activé avec un PVC workspace
+  `ReadWriteOnce`.
+- L'approbation developer est activée sans `github.existingSecret` (qui doit
+  contenir une clé `approval-token`) et `github.approvalTokenHash`.
 
 ## Pipeline CI
 
@@ -114,7 +134,7 @@ graph TD
   vuln --> components[check_components.sh]
   components --> ui[Build UI + fraîcheur de dist]
   ui --> lintImages[hadolint des deux Dockerfiles]
-  lintImages --> images[Build des deux images]
+  lintImages --> images[Build des trois images]
   images --> helmLint[helm lint]
   helmLint --> helmDrift[Dérive schéma/README]
   helmDrift --> helmTemplate[helm template + kubeconform + garde-fous]
@@ -181,7 +201,7 @@ premier, puis l'écouteur d'opérations, avec un budget de 10 s. Avec
 `disaster37/dagger-library-go@2.0.20` épinglé au commit
 `e205189be6eba617e7bcc870db2e73a04171f38e`. Le module expose des fonctions
 granulaires (`lint`, `vet`, `build`, `test`, `vulncheck`, `check-components`,
-`ui`, `lint-images`, `image-mcp`, `image-approval`, `helm-lint`,
+`ui`, `lint-images`, `image-mcp`, `image-approval`, `image-developer`, `helm-lint`,
 `helm-template`, `helm-schema`, `helm-docs`, `helm-publish`, `ci`).
 
 ### Build des images

@@ -19,12 +19,27 @@ import (
 // use at the category level (tools/list). When s.authz is nil, all tools are
 // registered (id is unused).
 func (s *Server) addTools(ctx context.Context, srv *mcpsdk.Server, id *Identity) error {
-	for _, t := range s.cfg.Tools {
+	tools := s.cfg.Tools
+	if s.cfg.ToolsFor != nil {
+		var err error
+		if tools, err = s.cfg.ToolsFor(ctx, id); err != nil {
+			return emperrors.Wrap(err, "failed to build per-identity tools")
+		}
+	}
+	writeTools := s.writeTools
+	if s.cfg.WriteToolsFor != nil {
+		names, err := s.cfg.WriteToolsFor(ctx, id)
+		if err != nil {
+			return emperrors.Wrap(err, "failed to build per-identity write tools")
+		}
+		writeTools = safety.NewWriteToolSet(names)
+	}
+	for _, t := range tools {
 		info, err := t.Info(ctx)
 		if err != nil {
 			return emperrors.Wrap(err, "failed to get tool info")
 		}
-		isWrite := s.writeTools[info.Name]
+		isWrite := writeTools[info.Name]
 		if s.authz != nil && !s.authz.CanUse(id, info.Name, isWrite) {
 			continue // hidden from this identity
 		}
@@ -37,7 +52,7 @@ func (s *Server) addTools(ctx context.Context, srv *mcpsdk.Server, id *Identity)
 			Description: info.Desc,
 			InputSchema: inputSchema,
 			Annotations: annotationsFor(isWrite),
-		}, s.makeHandler(t, info.Name, isWrite))
+		}, s.makeHandler(t, info.Name, isWrite, writeTools))
 	}
 	return nil
 }
@@ -45,7 +60,7 @@ func (s *Server) addTools(ctx context.Context, srv *mcpsdk.Server, id *Identity)
 // makeHandler wraps an eino tool as an MCP tool handler, reproducing the safety
 // middleware's preflight: RBAC → CEL policy → gate (dry-run/confirmed +
 // elicitation approval) → execute → audit.
-func (s *Server) makeHandler(t tool.InvokableTool, toolName string, isWrite bool) mcpsdk.ToolHandler {
+func (s *Server) makeHandler(t tool.InvokableTool, toolName string, isWrite bool, writeTools map[string]bool) mcpsdk.ToolHandler {
 	return func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 		args, approvalID, err := stripApprovalID(req.Params.Arguments)
 		if err != nil {
@@ -134,7 +149,7 @@ func (s *Server) makeHandler(t tool.InvokableTool, toolName string, isWrite bool
 					}
 				}
 			}
-			if err := safety.ShouldGateWithAuthorization(ctx, toolName, s.writeTools, gp, args, authorizer); err != nil {
+			if err := safety.ShouldGateWithAuthorization(ctx, toolName, writeTools, gp, args, authorizer); err != nil {
 				if !gp.DryRun {
 					s.auditApproval(ctx, toolName, callID, args, approvalID, approvalAuthorizer, err)
 				}

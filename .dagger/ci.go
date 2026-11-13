@@ -77,6 +77,9 @@ func (m *McpPlatform) Ci(
 	if _, err := m.ImageApproval().Sync(ctx); err != nil {
 		return nil, fmt.Errorf("build approval image: %w", err)
 	}
+	if _, err := m.ImageDeveloper().Sync(ctx); err != nil {
+		return nil, fmt.Errorf("build developer image: %w", err)
+	}
 	if _, err := m.HelmLint(ctx); err != nil {
 		return nil, fmt.Errorf("helm lint: %w", err)
 	}

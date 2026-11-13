@@ -2,21 +2,23 @@ package serverconfig
 
 import (
 	"context"
+	"time"
 
 	"emperror.dev/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	argocdmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/argocd"
-	grafanamcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/grafana"
-	kubernetesmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/kubernetes"
-	prometheusmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/prometheus"
 	argocdtool "github.com/webcenter-fr/eino-ext/components/tool/argocd"
 	grafanatool "github.com/webcenter-fr/eino-ext/components/tool/grafana"
 	k8stool "github.com/webcenter-fr/eino-ext/components/tool/kubernetes"
 	promtool "github.com/webcenter-fr/eino-ext/components/tool/prometheus"
 	mcpserver "github.com/webcenter-fr/go-mcp-platform/pkg/mcp"
+	argocdmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/argocd"
+	developermcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/developer"
+	grafanamcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/grafana"
+	kubernetesmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/kubernetes"
+	prometheusmcp "github.com/webcenter-fr/go-mcp-platform/pkg/servers/prometheus"
 )
 
 // Build wires the configured family into a pkg/mcp server. Client
@@ -89,9 +91,103 @@ func Build(ctx context.Context, cfg *Config) (*mcpserver.Server, error) {
 		}
 		return grafanamcp.NewServer(ctx, configs, mcpCfg)
 
+	case "developer":
+		if cfg.Developer == nil {
+			return nil, errors.New("serverconfig: developer family is not configured")
+		}
+		devCfg, err := developerConfigFromFamily(cfg.Developer)
+		if err != nil {
+			return nil, err
+		}
+		return developermcp.NewServer(ctx, devCfg, mcpCfg)
+
 	default:
-		return nil, errors.Errorf("unknown MCP server family %q: must be one of kubernetes, argocd, prometheus, grafana", cfg.Server)
+		return nil, errors.Errorf("unknown MCP server family %q: must be one of kubernetes, argocd, prometheus, grafana, developer", cfg.Server)
 	}
+}
+
+// developerConfigFromFamily translates the secret-reference configuration into
+// the developer family's resolved configuration.
+func developerConfigFromFamily(family *DeveloperFamily) (*developermcp.Config, error) {
+	cfg := &developermcp.Config{
+		WorkspaceRoot:      family.WorkspaceRoot,
+		BaseImage:          family.BaseImage,
+		ImageOverrides:     family.ImageOverrides,
+		AllowedImages:      family.AllowedImages,
+		MaxOutputBytes:     family.MaxOutputBytes,
+		MaxConcurrentExecs: family.MaxConcurrentExecs,
+		ContainerUser:      family.ContainerUser,
+		ExtraBlocklist:     family.ExtraBlocklist,
+		Scaffolding:        family.Scaffolding,
+		Engine: developermcp.EngineConfig{
+			Mode:          family.Engine.Mode,
+			RunnerHost:    family.Engine.RunnerHost,
+			CloudURL:      family.Engine.CloudURL,
+			CloudToken:    family.Engine.CloudToken,
+			EngineVersion: family.Engine.EngineVersion,
+			CLIPath:       family.Engine.CLIPath,
+		},
+	}
+	var err error
+	if cfg.DefaultTimeout, err = parseOptionalDuration(family.DefaultTimeout); err != nil {
+		return nil, errors.Wrap(err, "developer defaultTimeout")
+	}
+	if cfg.MaxTimeout, err = parseOptionalDuration(family.MaxTimeout); err != nil {
+		return nil, errors.Wrap(err, "developer maxTimeout")
+	}
+	if cfg.WorkspaceTTL, err = parseOptionalDuration(family.WorkspaceTTL); err != nil {
+		return nil, errors.Wrap(err, "developer workspaceTTL")
+	}
+	if cfg.WorkspaceGCInterval, err = parseOptionalDuration(family.WorkspaceGCInterval); err != nil {
+		return nil, errors.Wrap(err, "developer workspaceGCInterval")
+	}
+	if family.Egress != nil {
+		cfg.Egress = &developermcp.EgressConfig{
+			DefaultDeny:       family.Egress.DefaultDeny,
+			AllowHosts:        family.Egress.AllowHosts,
+			AllowCIDRs:        family.Egress.AllowCIDRs,
+			AllowLocalNetwork: family.Egress.AllowLocalNetwork,
+		}
+	}
+	if len(family.Engine.RegistryAuth) > 0 {
+		cfg.Engine.RegistryAuth = make(map[string]developermcp.RegistryAuthEntry, len(family.Engine.RegistryAuth))
+		for host, entry := range family.Engine.RegistryAuth {
+			cfg.Engine.RegistryAuth[host] = developermcp.RegistryAuthEntry{
+				Username: entry.Username,
+				Password: entry.Password,
+			}
+		}
+	}
+	if family.GitHub != nil {
+		cfg.GitHub = &developermcp.GitHubConfig{
+			ReadOnly:  family.GitHub.ReadOnly,
+			Instances: make(map[string]developermcp.GitHubInstance, len(family.GitHub.Instances)),
+		}
+		for name, instance := range family.GitHub.Instances {
+			timeout, err := parseOptionalDuration(instance.Timeout)
+			if err != nil {
+				return nil, errors.Wrapf(err, "developer github instance %q timeout", name)
+			}
+			cfg.GitHub.Instances[name] = developermcp.GitHubInstance{
+				Token:         instance.Token,
+				BaseURL:       instance.BaseURL,
+				UploadURL:     instance.UploadURL,
+				Timeout:       timeout,
+				TLSSkipVerify: instance.TLSSkipVerify,
+				MaxCopyBytes:  instance.MaxCopyBytes,
+			}
+		}
+	}
+	return cfg, nil
+}
+
+// parseOptionalDuration parses a Go duration string, returning zero for an
+// empty value so the constructor applies its default.
+func parseOptionalDuration(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(raw)
 }
 
 func buildRESTConfig(entry ClusterEntry) (*rest.Config, error) {

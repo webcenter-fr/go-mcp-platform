@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# tag: golang:1.27.3-bookworm
+FROM golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0 AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/mcp-server ./cmd/mcp-server
+
+# Fetch the pinned Dagger CLI. The SDK's runner-host path execs this binary.
+# The CLI is statically linked, so the runtime image can stay distroless/static.
+# tag: alpine:3.21
+FROM alpine:3.21@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab AS dagger-cli
+ARG DAGGER_VERSION=0.21.7
+RUN apk add --no-cache curl \
+ && curl -fsSL "https://dl.dagger.io/dagger/releases/${DAGGER_VERSION}/dagger_v${DAGGER_VERSION}_linux_amd64.tar.gz" -o /tmp/dagger.tgz \
+ && echo "44430afc6f9c390fc47c4f352b15de9309a5e97ebd1ae563839617d6df8e8cc5  /tmp/dagger.tgz" | sha256sum -c - \
+ && tar -xzf /tmp/dagger.tgz -C /usr/local/bin dagger \
+ && chmod 0755 /usr/local/bin/dagger
+
+# tag: gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+COPY --from=builder    /out/mcp-server        /usr/local/bin/mcp-server
+COPY --from=dagger-cli /usr/local/bin/dagger  /usr/local/bin/dagger
+ENV _EXPERIMENTAL_DAGGER_CLI_BIN=/usr/local/bin/dagger \
+    XDG_CACHE_HOME=/tmp/cache \
+    HOME=/tmp
+USER 65532:65532
+EXPOSE 8080 9090
+ENTRYPOINT ["/usr/local/bin/mcp-server"]

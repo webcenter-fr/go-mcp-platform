@@ -1,6 +1,6 @@
 {{- $root := . -}}
 {{- range $name, $cfg := .Values.mcpServers }}
-{{- if and $cfg.enabled $root.Values.mcp.networkPolicy.enabled }}
+{{- if and $cfg.enabled (ne $name "developer") $root.Values.mcp.networkPolicy.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

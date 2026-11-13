@@ -8,7 +8,7 @@ references, and wires the selected tool family into a
 ## Configuration
 
 ```yaml
-server: kubernetes          # kubernetes | argocd | prometheus | grafana
+server: kubernetes          # kubernetes | argocd | prometheus | grafana | developer
 transport: http             # stdio | http (default stdio)
 addr: ":8080"               # MCP HTTP listen address
 opsAddr: ":9090"            # /healthz, /readyz, /metrics (never in a Service)
@@ -26,6 +26,25 @@ kubernetes:
       kubeconfigFile: /etc/go-mcp-platform/kubeconfig/prod
       context: prod
       defaultTimeout: 30s
+
+# Developer family: credential-free Dagger sandbox + GitHub + scaffolding.
+developer:
+  workspaceRoot: /var/lib/go-mcp-platform/workspaces
+  baseImage: alpine:3.20
+  engine:
+    mode: sidecar            # sidecar | cloud | dagger-kubernetes
+    runnerHost: tcp://127.0.0.1:8081
+    # cloudURL: https://dagger.example.com
+    # cloudTokenFile: /etc/go-mcp-platform/secrets/dagger-cloud-token
+  egress:
+    defaultDeny: true
+    allowLocalNetwork: false
+  github:
+    readOnly: false
+    instances:
+      corp:
+        tokenFile: /etc/go-mcp-platform/secrets/github-token
+        timeout: 30s
 
 # URL/token families (argocd, prometheus, grafana) share the same shape.
 argocd:
@@ -99,5 +118,11 @@ srv, err := serverconfig.Build(ctx, cfg)
 ```
 
 `Build` is lazy: it constructs the family tools and the MCP server without
-contacting any external service. `OpsHandler(ready)` returns the unauthenticated
+contacting any external service. The developer family's Dagger engine is
+connected on the first `developer_sandbox_exec`, not at build time.
+
+> **Registry auth keys:** viper treats `.` as a key delimiter, so a
+> `developer.engine.registryAuth` hostname containing dots is split into nested
+> keys. Use a hostname without dots (or an existing Secret) until the loader
+> switches to a list-shaped registry-auth config. `OpsHandler(ready)` returns the unauthenticated
 operations handler (`/healthz`, `/readyz`, `/metrics`).

@@ -119,7 +119,10 @@ func (s *Server) ServerFor(ctx context.Context, id *Identity) (*mcpsdk.Server, e
 	// Without RBAC every identity shares one server (all tools); with RBAC one
 	// server per identity, cached by identity key.
 	key := identityCacheKey(id)
-	if s.authz == nil {
+	// ToolsFor builds a per-identity tool set, so identities must never share a
+	// server even without RBAC — otherwise one identity would be served
+	// another's tools (and another's workspace).
+	if s.authz == nil && s.cfg.ToolsFor == nil {
 		key = ""
 	}
 	s.mu.Lock()
@@ -129,6 +132,12 @@ func (s *Server) ServerFor(ctx context.Context, id *Identity) (*mcpsdk.Server, e
 	}
 	srv := mcpsdk.NewServer(s.impl, nil)
 	if err := s.addTools(ctx, srv, id); err != nil {
+		return nil, err
+	}
+	if err := s.addPrompts(ctx, srv, id); err != nil {
+		return nil, err
+	}
+	if err := s.addResources(ctx, srv, id); err != nil {
 		return nil, err
 	}
 	s.servers[key] = srv

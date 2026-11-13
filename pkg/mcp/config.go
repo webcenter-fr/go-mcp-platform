@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"context"
+
 	"github.com/cloudwego/eino/components/tool"
 
 	"github.com/webcenter-fr/eino-ext/libs/toolkit/safety"
@@ -14,11 +16,34 @@ type Config struct {
 	Version string `validate:"required" jsonschema:"(required) MCP server version"`
 	// Tools are the eino tools to expose.
 	Tools []tool.InvokableTool `json:"-"`
+	// ToolsFor returns the tool set for a specific identity. When non-nil it
+	// takes precedence over Tools and is called once per distinct identity (the
+	// result is cached with the per-identity server). It enables families whose
+	// tools are bound to per-identity state at construction time — e.g. the
+	// developer family, whose workspace root and clone directory are derived
+	// from the caller's subject so two identities never share a workspace.
+	//
+	// Setting ToolsFor forces identity-keyed server caching even when no
+	// Authorization policy is configured (see ServerFor). Implementations MUST
+	// be safe for concurrent use and MUST NOT retain ctx.
+	ToolsFor func(ctx context.Context, id *Identity) ([]tool.InvokableTool, error) `json:"-"`
 	// WriteTools lists tool names that perform write/mutative operations. They
 	// are gated (dry-run/confirmed + human approval) and annotated
 	// destructiveHint. Contract: every name listed MUST honor dryRun=true as a
 	// no-side-effect preview (same contract as the safety middleware).
 	WriteTools []string `json:"writeTools" jsonschema:"description=Tool names that perform write/mutative operations"`
+	// WriteToolsFor returns the write-tool names for a specific identity.
+	// Optional; when nil, WriteTools is used for every identity. Only consulted
+	// when ToolsFor is non-nil.
+	WriteToolsFor func(ctx context.Context, id *Identity) ([]string, error) `json:"-"`
+	// Prompts are MCP prompts exposed by this server. Optional.
+	Prompts []PromptSpec `json:"-" validate:"omitempty,dive"`
+	// Resources are MCP resources exposed by this server. Optional.
+	Resources []ResourceSpec `json:"-" validate:"omitempty,dive"`
+	// PromptsFor / ResourcesFor are the per-identity equivalents, used when
+	// non-nil (same contract as ToolsFor).
+	PromptsFor   func(ctx context.Context, id *Identity) ([]PromptSpec, error)   `json:"-"`
+	ResourcesFor func(ctx context.Context, id *Identity) ([]ResourceSpec, error) `json:"-"`
 	// InstanceParam is the name of the tool argument holding the target
 	// cluster/instance (e.g. "cluster" for kubernetes, "instance" for argocd,
 	// prometheus, grafana). Used for per-instance RBAC.

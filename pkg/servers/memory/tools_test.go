@@ -395,3 +395,40 @@ func TestMemoryStatsEmptyArguments(t *testing.T) {
 	out := decodeOutput[MemoryStatsOutput](t, res)
 	assert.Equal(t, string(BackendMemory), out.Backend)
 }
+
+func TestMemoryStoreForeignIDRejected(t *testing.T) {
+	srv := newTestServer(t, &Config{Backend: BackendMemory}, nil)
+	alice := connectInMemory(t, srv, &mcpserver.Identity{User: "alice", Sub: "sub-alice"})
+	bob := connectInMemory(t, srv, &mcpserver.Identity{User: "bob", Sub: "sub-bob"})
+
+	stored := decodeOutput[MemoryStoreOutput](t, callTool(t, alice, "memory_store", map[string]any{
+		"kind": "fact", "content": "alice only",
+	}))
+	res := callTool(t, bob, "memory_store", map[string]any{
+		"id": stored.Record.ID, "kind": "fact", "content": "overwrite",
+	})
+	require.True(t, res.IsError)
+}
+
+func TestMemoryDeleteByEachFilter(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter map[string]any
+	}{
+		{name: "kind", filter: map[string]any{"kind": "fact"}},
+		{name: "sessionId", filter: map[string]any{"sessionId": "s1"}},
+		{name: "scope", filter: map[string]any{"scope": "repo:a"}},
+		{name: "tag", filter: map[string]any{"tag": "go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newTestServer(t, &Config{Backend: BackendMemory}, nil)
+			cs := connectInMemory(t, srv, nil)
+			callTool(t, cs, "memory_store", map[string]any{
+				"kind": "fact", "content": "alpha", "scope": "repo:a", "sessionId": "s1", "tags": []string{"go"},
+			})
+			out := decodeOutput[MemoryDeleteOutput](t, callTool(t, cs, "memory_delete", tt.filter))
+			assert.Equal(t, 1, out.Deleted)
+		})
+	}
+}

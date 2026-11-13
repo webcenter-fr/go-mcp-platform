@@ -298,3 +298,84 @@ func TestBuildDeveloper(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, srv)
 }
+
+func TestLoadMemoryConfig(t *testing.T) {
+	cfg, err := Load("testdata/memory.yaml", nil)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Memory)
+	assert.Equal(t, "file", cfg.Memory.Backend)
+	assert.Equal(t, "per_identity", cfg.Memory.Isolation)
+	assert.Equal(t, "shared", cfg.Memory.SharedNamespace)
+	assert.Equal(t, "/var/lib/go-mcp-platform/memory", cfg.Memory.File.Dir)
+	assert.True(t, cfg.Memory.RequireDeleteApproval)
+	require.NotNil(t, cfg.Memory.Prompts)
+	assert.True(t, *cfg.Memory.Prompts)
+	assert.Equal(t, 5, cfg.Memory.DefaultTopK)
+	assert.Equal(t, 50, cfg.Memory.MaxTopK)
+	assert.Equal(t, 16384, cfg.Memory.MaxContentChars)
+	assert.Equal(t, 4096, cfg.Memory.MaxQueryChars)
+	assert.Equal(t, "30s", cfg.Memory.RequestTimeout)
+}
+
+func TestLoadMemoryEnvOverrides(t *testing.T) {
+	t.Setenv("MCP_PLATFORM_MEMORY_BACKEND", "memory")
+	t.Setenv("MCP_PLATFORM_MEMORY_ISOLATION", "shared")
+	cfg, err := Load("testdata/memory.yaml", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "memory", cfg.Memory.Backend)
+	assert.Equal(t, "shared", cfg.Memory.Isolation)
+}
+
+func TestLoadMemorySecrets(t *testing.T) {
+	dir := t.TempDir()
+	password := writeFile(t, dir, "password", "opensearch-password\n")
+	embeddingKey := writeFile(t, dir, "embedding-key", "embedding-key\n")
+	llmKey := writeFile(t, dir, "llm-key", "llm-key\n")
+	content := "server: memory\n" +
+		"memory:\n" +
+		"  backend: opensearch\n" +
+		"  opensearch:\n" +
+		"    urls: [https://opensearch.example.com]\n" +
+		"    passwordFile: " + password + "\n" +
+		"  embedding:\n" +
+		"    provider: openai\n" +
+		"    model: text-embedding-3-small\n" +
+		"    apiKeyFile: " + embeddingKey + "\n" +
+		"  llm:\n" +
+		"    provider: openai\n" +
+		"    model: gpt-4o-mini\n" +
+		"    apiKeyFile: " + llmKey + "\n"
+	cfg, err := Load(writeConfig(t, content), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "opensearch-password", cfg.Memory.OpenSearch.Password)
+	assert.Equal(t, "embedding-key", cfg.Memory.Embedding.APIKey)
+	assert.Equal(t, "llm-key", cfg.Memory.LLM.APIKey)
+}
+
+func TestLoadMemoryValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "missing memory block", content: "server: memory\n", wantErr: "memory"},
+		{name: "file without dir", content: "server: memory\nmemory:\n  backend: file\n", wantErr: "file.dir"},
+		{name: "opensearch without urls", content: "server: memory\nmemory:\n  backend: opensearch\n", wantErr: "opensearch.urls"},
+		{name: "invalid request timeout", content: "server: memory\nmemory:\n  requestTimeout: not-a-duration\n", wantErr: "requestTimeout"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, tt.content), nil)
+			require.Error(t, err)
+			assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.wantErr))
+		})
+	}
+}
+
+func TestBuildMemory(t *testing.T) {
+	cfg, err := Load("testdata/memory.yaml", nil)
+	require.NoError(t, err)
+	srv, err := Build(context.Background(), cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, srv)
+}

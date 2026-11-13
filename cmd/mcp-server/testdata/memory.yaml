@@ -1,0 +1,20 @@
+server: memory
+transport: http
+addr: ":8080"
+opsAddr: ":9090"
+log:
+  level: info
+  format: text
+memory:
+  backend: file
+  isolation: per_identity
+  file:
+    dir: /var/lib/go-mcp-platform/memory
+  readOnly: false
+  requireDeleteApproval: true
+  prompts: true
+  defaultTopK: 5
+  maxTopK: 50
+  maxContentChars: 16384
+  maxQueryChars: 4096
+  requestTimeout: 30s

@@ -1,7 +1,7 @@
 # go-mcp-platform
 
 A deployable MCP platform: one MCP server per eino tool family (Kubernetes,
-ArgoCD, Prometheus, Grafana, Developer) plus a standalone out-of-band
+ArgoCD, Prometheus, Grafana, Developer, Memory) plus a standalone out-of-band
 human-approval service with an embedded Nuxt UI. It provides provider-based authentication
 (local static tokens + OIDC), granular RBAC, and signed-receipt approval for
 write tools.
@@ -18,7 +18,7 @@ Dependencies point inward and never reverse:
 cmd/  ->  internal/  ->  pkg/  ->  github.com/webcenter-fr/eino-ext
 ```
 
-- `cmd/mcp-server/` — deployable MCP server binary (one binary, five families).
+- `cmd/mcp-server/` — deployable MCP server binary (one binary, six families).
 - `cmd/approval-server/` — standalone approval-service binary.
 - `internal/serverconfig/` — YAML configuration and binary wiring.
 - `internal/approval/` — approval service, store backends and the embedded Nuxt
@@ -27,7 +27,8 @@ cmd/  ->  internal/  ->  pkg/  ->  github.com/webcenter-fr/eino-ext
 - `pkg/mcp/` — public generic MCP toolkit (auth, RBAC, approval, transports).
 - `pkg/mcp/approval/` — public approval-service client.
 - `pkg/servers/` — public embeddable per-family servers, including the
-  credential-free developer sandbox (`pkg/servers/developer`).
+  credential-free developer sandbox (`pkg/servers/developer`) and typed
+  long-term agent memory (`pkg/servers/memory`).
 - `helm/go-mcp-platform/` — Helm chart.
 - `.dagger/` — Dagger CI module (Go gates, UI, images, Helm, publish).
 - `docs/design/` — bilingual technical design documents.
@@ -40,6 +41,7 @@ MCP server:
 go run ./cmd/mcp-server --server kubernetes --config config.yaml
 go run ./cmd/mcp-server --server grafana --config config.yaml --transport http
 go run ./cmd/mcp-server --server developer --config config.yaml --transport http
+go run ./cmd/mcp-server --server memory --config config.yaml --transport http
 ```
 
 Approval service:
@@ -118,5 +120,6 @@ directive: CI runners have no sibling checkout, and a committed `replace` makes
 the published module unusable for downstream consumers.
 
 See the [architecture design doc](./docs/design/00-architecture.en.md), the
-[developer sandbox design doc](./docs/design/03-developer-sandbox.en.md) and
+[developer sandbox design doc](./docs/design/03-developer-sandbox.en.md), the
+[memory design doc](./docs/design/04-mcp-memory.en.md) and
 [`CONTRIBUTING.md`](./CONTRIBUTING.md).

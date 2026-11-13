@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"emperror.dev/errors"
@@ -66,21 +67,10 @@ func NewCapturer(ctx context.Context, cfg *Config) (Capturer, error) {
 		return newLLMCapturer(cfg, cfg.ChatModel), nil
 	}
 	if cfg.LLM != nil {
-		built, err := chatmodel.New(ctx, &chatmodel.Config{
-			Provider:        chatmodel.Provider(cfg.LLM.Provider),
-			BaseURL:         cfg.LLM.BaseURL,
-			Model:           cfg.LLM.Model,
-			Temperature:     cfg.LLM.Temperature,
-			Thinking:        chatmodel.ThinkingLevel(cfg.LLM.Thinking),
-			MaxOutputTokens: cfg.LLM.MaxOutputTokens,
-			Timeout:         cfg.LLM.Timeout,
-			TLSSkipVerify:   cfg.LLM.TLSSkipVerify,
-			APIKey:          cfg.LLM.APIKey,
-		})
-		if err != nil {
-			return nil, errors.Wrap(err, "memory: failed to build chat model")
-		}
-		return newLLMCapturer(cfg, built), nil
+		// The chat model is built lazily on the first Capture call so that
+		// NewServer performs no network I/O (e.g. the github-copilot token
+		// exchange) at construction time.
+		return &llmCapturer{cfg: cfg}, nil
 	}
 	return &transcriptCapturer{cfg: cfg}, nil
 }
@@ -91,6 +81,9 @@ type llmCapturer struct {
 	cfg       *Config
 	model     model.BaseChatModel
 	extractor *memoryagent.Extractor
+
+	mu    sync.Mutex
+	built bool
 }
 
 func newLLMCapturer(cfg *Config, chatModel model.BaseChatModel) *llmCapturer {
@@ -98,18 +91,50 @@ func newLLMCapturer(cfg *Config, chatModel model.BaseChatModel) *llmCapturer {
 		cfg:       cfg,
 		model:     chatModel,
 		extractor: memoryagent.NewExtractor(chatModel),
+		built:     true,
 	}
 }
 
-// Enabled reports that server-side LLM capture is available.
+// Enabled reports that server-side LLM capture is configured.
 func (c *llmCapturer) Enabled() bool {
-	return c.model != nil
+	return c.cfg.LLM != nil || c.model != nil
+}
+
+// ensureBuilt lazily constructs the chat model and extractor on first use so
+// NewServer performs no network I/O at construction time.
+func (c *llmCapturer) ensureBuilt(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.built {
+		return nil
+	}
+	built, err := chatmodel.New(ctx, &chatmodel.Config{
+		Provider:        chatmodel.Provider(c.cfg.LLM.Provider),
+		BaseURL:         c.cfg.LLM.BaseURL,
+		Model:           c.cfg.LLM.Model,
+		Temperature:     c.cfg.LLM.Temperature,
+		Thinking:        chatmodel.ThinkingLevel(c.cfg.LLM.Thinking),
+		MaxOutputTokens: c.cfg.LLM.MaxOutputTokens,
+		Timeout:         c.cfg.LLM.Timeout,
+		TLSSkipVerify:   c.cfg.LLM.TLSSkipVerify,
+		APIKey:          c.cfg.LLM.APIKey,
+	})
+	if err != nil {
+		return errors.Wrap(err, "memory: failed to build chat model")
+	}
+	c.model = built
+	c.extractor = memoryagent.NewExtractor(built)
+	c.built = true
+	return nil
 }
 
 // Capture summarizes the conversation and, when requested, extracts typed
 // memories. A malformed extraction response degrades to the summary instead of
 // failing the whole capture.
 func (c *llmCapturer) Capture(ctx context.Context, req CaptureRequest) (*CaptureResult, error) {
+	if err := c.ensureBuilt(ctx); err != nil {
+		return nil, err
+	}
 	result := &CaptureResult{}
 
 	if summary := strings.TrimSpace(req.Summary); summary != "" {

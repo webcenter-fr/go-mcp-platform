@@ -112,3 +112,16 @@ func TestNewCapturerWithInjectedModel(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, capturer.Enabled())
 }
+
+func TestNewCapturerLazyLLMConstruction(t *testing.T) {
+	capturer, err := NewCapturer(context.Background(), &Config{
+		LLM: &LLMConfig{Provider: "openai", Model: "gpt-4o-mini"},
+	})
+	require.NoError(t, err)
+	assert.True(t, capturer.Enabled(), "a configured LLM must report enabled before first use")
+
+	llm, ok := capturer.(*llmCapturer)
+	require.True(t, ok)
+	assert.Nil(t, llm.model, "the chat model must not be built at construction time")
+	assert.False(t, llm.built)
+}

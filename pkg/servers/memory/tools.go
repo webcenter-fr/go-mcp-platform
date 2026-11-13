@@ -380,6 +380,9 @@ func (s *memoryService) captureDiscussion(ctx context.Context, params *MemoryCap
 	if strings.TrimSpace(result.Summary) == "" {
 		return "", ErrContentEmpty
 	}
+	if length := utf8.RuneCountInString(result.Summary); length > s.cfg.MaxContentChars {
+		return "", errors.Errorf("memory: discussion summary is %d characters, exceeding the %d-character limit; summarize or shorten it and retry", length, s.cfg.MaxContentChars)
+	}
 
 	store, err := s.router.storeFor(opCtx, s.tenantID)
 	if err != nil {
@@ -403,6 +406,9 @@ func (s *memoryService) captureDiscussion(ctx context.Context, params *MemoryCap
 
 	extracted := make([]Record, 0, len(result.Extracted))
 	for _, item := range result.Extracted {
+		if length := utf8.RuneCountInString(item.Content); length > s.cfg.MaxContentChars {
+			continue
+		}
 		rec := &Record{
 			Kind:      item.Kind,
 			Title:     item.Title,

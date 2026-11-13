@@ -159,6 +159,18 @@ func TestMemoryCaptureDiscussionValidation(t *testing.T) {
 	assert.Contains(t, strings.ToLower(resultText(t, res)), "content")
 }
 
+func TestMemoryCaptureDiscussionOversizedSummary(t *testing.T) {
+	srv := newTestServer(t, &Config{Backend: BackendMemory, MaxContentChars: 256}, nil)
+	cs := connectInMemory(t, srv, nil)
+
+	res := callTool(t, cs, "memory_capture_discussion", map[string]any{
+		"messages": []map[string]any{{"role": "user", "content": "hello"}},
+		"summary":  strings.Repeat("x", 300),
+	})
+	require.True(t, res.IsError)
+	assert.Contains(t, strings.ToLower(resultText(t, res)), "exceeding")
+}
+
 func TestMemoryCaptureRedactsBeforeLLM(t *testing.T) {
 	model := &fakeChatModel{responses: []string{"summary", "[]"}}
 	srv := newTestServer(t, &Config{Backend: BackendMemory, ChatModel: model}, nil)

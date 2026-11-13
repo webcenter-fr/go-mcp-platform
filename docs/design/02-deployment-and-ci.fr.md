@@ -126,7 +126,7 @@ exécute `gofumpt -w` sur tout le dépôt.
 
 ```mermaid
 graph TD
-  lint[Lint : golangci-lint v2.12] --> vet[Vet]
+  lint[Lint : golangci-lint v2.14] --> vet[Vet]
   vet --> build[Build]
   build --> test[Test]
   test --> codecov[Codecov si jeton présent]
@@ -143,7 +143,7 @@ graph TD
 
 `Test` exécute `go test` sur le module et écrit `coverage.out` ; aucun binaire
 de test externe n'est nécessaire. `Lint` installe
-`golangci-lint@v2.12.0` dans `/usr/local/bin`, hors du `$GOPATH/bin` monté en
+`golangci-lint@v2.14.0` dans `/usr/local/bin`, hors du `$GOPATH/bin` monté en
 cache.
 
 ## Séquence d'approbation entre pods

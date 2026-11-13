@@ -41,7 +41,7 @@ For local development against a sibling checkout, create a **gitignored**
 `go.work` at the repository root:
 
 ```
-go 1.26.3
+go 1.27
 
 use .
 use ../eino-ext

@@ -118,7 +118,7 @@ The chart fails at render time when:
 
 ```mermaid
 graph TD
-  lint[Lint: golangci-lint v2.12] --> vet[Vet]
+  lint[Lint: golangci-lint v2.14] --> vet[Vet]
   vet --> build[Build]
   build --> test[Test]
   test --> codecov[Codecov when token present]
@@ -135,7 +135,7 @@ graph TD
 
 `Test` runs `go test` over the module and writes `coverage.out`; no external
 test binaries are needed. `Lint` installs
-`golangci-lint@v2.12.0` into `/usr/local/bin`, outside the cache-mounted
+`golangci-lint@v2.14.0` into `/usr/local/bin`, outside the cache-mounted
 `$GOPATH/bin`.
 
 ## Approval sequence across pods
